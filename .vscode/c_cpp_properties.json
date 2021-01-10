@@ -1,0 +1,42 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/cores/arduino",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/variants/standard",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/EEPROM/src",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/HID/src",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/SPI/src",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/SoftwareSerial/src",
+                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/Wire/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/HT1621/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/Adafruit_Unified_Sensor",
+                "${env:HOME}/Work/Projects/Arduino/libraries/Adafruit_HMC5883_Unified",
+                "${env:HOME}/Work/Projects/Arduino/libraries/TinyGPSPlus/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/Button/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/Bounce2-2.53/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/PushButton/src"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "F_CPU=16000000L",
+                "USBCON",
+                "ARDUINO=10805",
+                "ARDUINO_AVR_NANO",
+                "ARDUINO_ARCH_AVR"
+            ],
+            "macFrameworkPath": [
+                "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks"
+            ],
+            "compilerPath": "/Users/pavel/Library/Arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
