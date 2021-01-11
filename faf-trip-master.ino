@@ -174,7 +174,6 @@ unsigned long calculateTripValue(unsigned long current,
 //
 
 State screenUpdate(State state) {
-  // Display individual screens
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
     lcd.print(state.tripTotal / 1000.0, 1);
@@ -183,6 +182,7 @@ State screenUpdate(State state) {
     lcd.print(state.tripPartial / 1000.0, state.decimals);
     break;
   case SCREEN_HEADING:
+    // I don't like to check the gps here...
     gps.course.isValid()
       ? lcd.print(state.tripHeading, 0)
       : lcd.print(state.magnetoHeading, 0);
@@ -306,22 +306,40 @@ State gpsUpdate(State state, double minDistanceTreshold) {
       // https://www.instructables.com/Distance-measuring-and-more-device-using-Arduino-a/
       //
       if (gps.location.isValid() && gps.location.isUpdated()) {
-        if (state.gpsLastLocation.lat != 0.0 && state.gpsLastLocation.lng != 0.0) {
+        if (state.gpsLastLocation.lat == 0.0 && state.gpsLastLocation.lng == 0.0) {
+          state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
+        } else {
           unsigned long distance =
             (unsigned long)TinyGPSPlus::distanceBetween(gps.location.lat(),
                                                         gps.location.lng(),
                                                         state.gpsLastLocation.lat,
                                                         state.gpsLastLocation.lng);
+          // Should we update or not?
+          bool update = true;
+
+          // If the location age is older than 1500ms we most likely don't have
+          // gps fix anymore and we need to wait for new fix.
+          if (update)
+            update = gps.location.age() < (unsigned long)1500;
+
+          // When speed is very low we risk having loads of error due to
+          // coordinates being too close together
+          if (update)
+            update = state.tripSpeed > (byte)5;
+
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
-          if (distance > minDistanceTreshold) {
+          if(update)
+            update = distance > (unsigned long)4;
+
+          // If we think we should update distance, lets do it
+          if (update) {
+            state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
             state.tripLifetime += distance;
             state.tripPartial += distance;
             state.tripTotal += distance;
           }
         }
-        // Update last GPS location
-        state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
       }
     }
   }
