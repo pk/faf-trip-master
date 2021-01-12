@@ -22,6 +22,8 @@
 #include <Adafruit_HMC5883_U.h>
 #include <Adafruit_Sensor.h>
 #include <HT1621.h>
+#include <SPI.h>
+#include <SD.h>
 #include <SoftwareSerial.h>
 #include <TinyGPS++.h>
 #include <Wire.h>
@@ -32,28 +34,32 @@
 #include <Bounce2.h>
 
 // Buttons
-const unsigned int BUTTON_HOLD_DELAY = 800;
-const unsigned int BUTTON_HOLD_REPEAT = 30;
+#define BUTTON_HOLD_DELAY 800
+#define BUTTON_HOLD_REPEAT 30
 PushButton buttonUp = PushButton(A0, ENABLE_INTERNAL_PULLUP);
 PushButton buttonDown = PushButton(A1, ENABLE_INTERNAL_PULLUP);
 
 // LCD display
-static const int LCD_CS_PIN = 6, LCD_WR_PIN = 7, LCD_DATA_PIN = 8;
+#define LCD_CS_PIN 6
+#define LCD_WR_PIN 7
+#define LCD_DATA_PIN 8
 HT1621 lcd;
 
 // Magnetometer sensor
-Adafruit_HMC5883_Unified magneto = Adafruit_HMC5883_Unified(12345);
+// Adafruit_HMC5883_Unified magneto = Adafruit_HMC5883_Unified(12345);
 
 // Speed
-static const int SPEED_PIN = A2;
+#define SPEED_PIN A2
 
 // GPS Unit
-static const int GPS_RX_PIN = 4, GPS_TX_PIN = 5;
+#define GPS_RX_PIN 4
+#define GPS_TX_PIN 5
 SoftwareSerial gpsSerial(GPS_RX_PIN, GPS_TX_PIN);
 TinyGPSPlus gps;
 
 // UI
-unsigned long previousMillis = 0;
+unsigned long uiMillis = 0;
+unsigned long sdCardMillis = 0;
 const unsigned long UI_REFRESH_INTERVAL = 500;
 const unsigned long MAX_TRIP_VALUE = 99999;
 const unsigned long MIN_TRIP_VALUE = 0;
@@ -104,7 +110,6 @@ struct State {
   unsigned long tripPartial = 0;
 } state;
 
-
 //
 // Arduino
 //
@@ -120,30 +125,36 @@ void setup(void)  {
   buttonDown.onRelease(150, onButtonReleased);
   buttonDown.onHoldRepeat(BUTTON_HOLD_DELAY, BUTTON_HOLD_REPEAT, onButtonHeld);
 
+  pinMode(SPEED_PIN, INPUT);
+
+  // magneto.begin();
+
+  gpsSerial.begin(9600);
+
   lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN);
   lcd.clear();
   lcd.setBatteryLevel(0);
-
-  pinMode(SPEED_PIN, INPUT);
-
-  magneto.begin();
-
-  gpsSerial.begin(9600);
 }
 
 void loop(void) {
   buttonUp.update();
   buttonDown.update();
 
-  state.magnetoHeading = calculateMagnetoHeading(state.magnetoDeclinationAngle);
-  state = gpsUpdate(state, 4.0);
+  // state.magnetoHeading = calculateMagnetoHeading(magneto, state.magnetoDeclinationAngle);
+  gpsUpdate(state, 4.0);
 
   // Update data and display every display interval
   unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= UI_REFRESH_INTERVAL) {
-    previousMillis = currentMillis;
+  if (currentMillis - uiMillis >= UI_REFRESH_INTERVAL) {
+    uiMillis = currentMillis;
     screenUpdate(state);
-    state = screenUpdateBatteryIndicator(state);
+    screenUpdateBatteryIndicator(state);
+  }
+
+  if (currentMillis - sdCardMillis >= 3 * UI_REFRESH_INTERVAL) {
+    sdCardMillis = currentMillis;
+    String dataString = "SD Millis: " + String(sdCardMillis);
+    sdWrite(dataString);
   }
 
   // WIP: This will need to be interrupt for the wheel sensor, placeholder
@@ -173,7 +184,8 @@ unsigned long calculateTripValue(unsigned long current,
 // UI
 //
 
-State screenUpdate(State state) {
+void screenUpdate(State& state) {
+  lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN);
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
     lcd.print(state.tripTotal / 1000.0, 1);
@@ -246,7 +258,7 @@ void onButtonHeld(Button& btn, uint16_t duration, uint8_t repeat_count) {
  * It blinks battery indicator if there is no GPS and it shows certain number
  * of bars based on the GPS Satelites at the moment.
  */
-State screenUpdateBatteryIndicator(State state) {
+void screenUpdateBatteryIndicator(State& state) {
   byte level;
   if (state.gpsPrecision == -1) {
     state.gpsPrecision = 0;
@@ -264,15 +276,12 @@ State screenUpdateBatteryIndicator(State state) {
     }
   }
   lcd.setBatteryLevel(level);
-
-  return state;
 }
 
 //
 // GPS
 //
-
-State gpsUpdate(State state, double minDistanceTreshold) {
+void gpsUpdate(State& state, double minDistanceTreshold) {
   while (gpsSerial.available() > 0) {
     if (gps.encode(gpsSerial.read())) {
       if (gps.satellites.isValid() && gps.satellites.isUpdated()) {
@@ -343,13 +352,6 @@ State gpsUpdate(State state, double minDistanceTreshold) {
       }
     }
   }
-
-  if (millis() > 5000 && gps.charsProcessed() < 10) {
-    Serial.println(F("No GPS detected: check wiring."));
-    //while(true);
-  }
-
-  return state;
 }
 
 //
@@ -361,11 +363,10 @@ State gpsUpdate(State state, double minDistanceTreshold) {
 //
 // Magnetometer
 //
-
-float calculateMagnetoHeading(float declinationAngle) {
+float calculateMagnetoHeading(Adafruit_HMC5883_Unified &mag, float declinationAngle) {
   // Get a new sensor event
   sensors_event_t event; 
-  magneto.getEvent(&event);
+  mag.getEvent(&event);
 
   // Hold the module so that Z is pointing 'up' and you can measure the heading with x&y
   // Calculate heading when the magnetometer is level, then correct for signs of axis.
@@ -387,4 +388,20 @@ float calculateMagnetoHeading(float declinationAngle) {
    
   // Convert radians to degrees for readability.
   return heading * 180/M_PI; 
+}
+
+void sdWrite(String& data) {
+  if (!SD.begin(9)) {
+    Serial.println(F("Can't initialize SD Card..."));
+    return; 
+  }
+
+  File file = SD.open("data.txt", FILE_WRITE);
+  if (!file) {
+    Serial.println(F("Can't open the data.txt"));
+    file.close();
+    return; 
+  }
+  file.println(data);
+  file.close();
 }
