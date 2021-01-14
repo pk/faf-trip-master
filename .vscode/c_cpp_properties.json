@@ -8,16 +8,17 @@
                 "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/variants/standard",
                 "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/EEPROM/src",
                 "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/HID/src",
-                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/SPI/src",
-                "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/SoftwareSerial/src",
                 "${env:HOME}/Library/Arduino15/packages/arduino/hardware/avr/1.8.3/libraries/Wire/src",
                 "${env:HOME}/Work/Projects/Arduino/libraries/HT1621/src",
                 "${env:HOME}/Work/Projects/Arduino/libraries/Adafruit_Unified_Sensor",
                 "${env:HOME}/Work/Projects/Arduino/libraries/Adafruit_HMC5883_Unified",
                 "${env:HOME}/Work/Projects/Arduino/libraries/TinyGPSPlus/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/NeoGPS/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/NeoSWSerial/src",
                 "${env:HOME}/Work/Projects/Arduino/libraries/Button/src",
                 "${env:HOME}/Work/Projects/Arduino/libraries/Bounce2-2.53/src",
-                "${env:HOME}/Work/Projects/Arduino/libraries/PushButton/src"
+                "${env:HOME}/Work/Projects/Arduino/libraries/PushButton/src",
+                "${env:HOME}/Work/Projects/Arduino/libraries/SdFat-2.0.4/src"
             ],
             "defines": [
                 "_DEBUG",
