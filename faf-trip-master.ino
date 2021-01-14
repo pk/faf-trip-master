@@ -233,7 +233,7 @@ void screenUpdate(State& state) {
     break;
   case SCREEN_HEADING:
     char heading[5];
-    sprintf(heading, "%u*", state.gpsHeading);
+    snprintf(heading, sizeof(heading), "%u*", state.gpsHeading);
     lcd.print(heading, true);
     break;
   case SCREEN_SPEED:
@@ -332,25 +332,26 @@ bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long di
   File file = SD.open(SD_GPS_FILE, O_RDWR);
   if (!file) { return false; }
 
-  char latString[10];
-  dtostrf(fix.location.lat(), 9, 6, latString);
+  char latString[11];
+  dtostrf(fix.location.lat(), 10, 7, latString);
 
-  char lonString[10];
-  dtostrf(fix.location.lng(), 9, 6, lonString);
+  char lonString[11];
+  dtostrf(fix.location.lng(), 10, 7, lonString);
 
   char line[50];
-  sprintf(line,
-          "%s,%u,%s,%s,%u,%u,%u,%u,%u",
-          update ? "Y" : "N",
-          state.gpsPrecision,
-          latString,
-          lonString,
-          distance,
-          state.gpsHeading,
-          state.gpsSpeed,
-          0,
-          0
-          );
+  snprintf(line,
+           sizeof(line),
+           "%s,%u,%s,%s,%u,%u,%u,%u,%u",
+           update ? "Y" : "N",
+           state.gpsPrecision,
+           latString,
+           lonString,
+           distance,
+           state.gpsHeading,
+           state.gpsSpeed,
+           0,
+           0
+           );
   file.println(line);
   file.close();
 
