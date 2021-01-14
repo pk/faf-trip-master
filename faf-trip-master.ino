@@ -4,65 +4,86 @@
  * 
  * TODO
  *   - Menu needs to be implemented
- *   - That needs changes to HT1621 to display characters
- *   - SD Card storage
  *   - Distance & Speed from Hall sensor, this just needs some storage & interrupt
+ *   - Add dhop handling (https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps)
  * 
  * Libraries
- *  HT1621 - https://github.com/5N44P/ht1621-7-seg
- *         - Unable to display characters which will be needed for Menu
- *           but it seems it could be easy to add display(char c, int poistion)
- *           reasonably easy
+ *  HT1621 - https://github.com/pk/ht1621-7-seg
+ *         - My fork until merged into the master
+ * 
  *  PushButton - https://github.com/r89m/PushButton
  *             - Needs dependencies Button, Bounce2 (v 2.53)
+ * 
+ *  SdFat - https://github.com/greiman/SdFat
+ * 
+ *  NeoGPS - https://github.com/SlashDevin/NeoGPS
+ * 
+ *  TinyGPS++ - https://github.com/mikalhart/TinyGPSPlus
  * 
  * Compile & Deploy
  *  arduino-cli compile -b arduino:avr:nano -p /dev/cu.usbserial-A947ST0C --upload
  */
-#include <Adafruit_HMC5883_U.h>
-#include <Adafruit_Sensor.h>
-#include <HT1621.h>
-#include <SPI.h>
-#include <SD.h>
-#include <SoftwareSerial.h>
-#include <TinyGPS++.h>
-#include <Wire.h>
+#define DEBUG 1
+// #define USE_SPEED_SENSOR
+// #define USE_MAGNETOMETER
+
 // Buttons
 #include <Button.h>
 #include <ButtonEventCallback.h>
 #include <PushButton.h>
 #include <Bounce2.h>
-
-// Buttons
 #define BUTTON_HOLD_DELAY 800
 #define BUTTON_HOLD_REPEAT 30
 PushButton buttonUp = PushButton(A0, ENABLE_INTERNAL_PULLUP);
 PushButton buttonDown = PushButton(A1, ENABLE_INTERNAL_PULLUP);
 
 // LCD display
+#include <HT1621.h>
 #define LCD_CS_PIN 6
 #define LCD_WR_PIN 7
 #define LCD_DATA_PIN 8
 HT1621 lcd;
 
 // Magnetometer sensor
-// Adafruit_HMC5883_Unified magneto = Adafruit_HMC5883_Unified(12345);
+#ifdef USE_MAGNETOMETER
+  #include <Adafruit_HMC5883_U.h>
+  #include <Adafruit_Sensor.h>
+  #include <Wire.h>
+  Adafruit_HMC5883_Unified magneto = Adafruit_HMC5883_Unified(12345);
+#endif
 
 // Speed
 #define SPEED_PIN A2
 
 // GPS Unit
-#define GPS_RX_PIN 4
-#define GPS_TX_PIN 5
-SoftwareSerial gpsSerial(GPS_RX_PIN, GPS_TX_PIN);
-TinyGPSPlus gps;
+#define GPS_USE_TINYGPS
+#ifdef GPS_USE_TINYGPS
+  #include <TinyGPS++.h>
+  #include <NeoSWSerial.h>
+  #define GPS_BAULD_RATE 9600
+  #define GPS_RX_PIN 4
+  #define GPS_TX_PIN 5
+  TinyGPSPlus gps;
+  NeoSWSerial gpsPort(GPS_RX_PIN, GPS_RX_PIN);
+#else
+  #define GPS_USE_NEOGPS
+  #include <NMEAGPS.h>
+  #include <GPSport.h>
+  NMEAGPS gps;
+#endif
+
+// SDCard
+#define SD_CS_PIN SS
+#define SD_GPS_FILE "gps.txt"
+#include <SdFat.h>
+SdFat SD;
 
 // UI
+#define UI_REFRESH_INTERVAL 500
+#define MAX_TRIP_VALUE 99999
+#define MIN_TRIP_VALUE 0
 unsigned long uiMillis = 0;
 unsigned long sdCardMillis = 0;
-const unsigned long UI_REFRESH_INTERVAL = 500;
-const unsigned long MAX_TRIP_VALUE = 99999;
-const unsigned long MIN_TRIP_VALUE = 0;
 
 struct Coordinate {
   double lat;
@@ -79,29 +100,23 @@ enum Screen {
 
 struct State {
   byte activeScreen = SCREEN_TOTAL;
-
-  bool useGPS = true;
-  Coordinate gpsLastLocation = { 0.0, 0.0 };
-  char gpsPrecision = 0;
-
-  float magnetoDeclinationAngle = 0.0698132;
-  float magnetoHeading = 0.0;
-
   // How many decimal points we want to display
   // (this influences increment 10 or 100 m when adjusting distance)
   byte decimals = 2;
 
+  #ifdef USE_MAGNETOMETER
+  float magnetoDeclinationAngle = 0.0698132;
+  word magnetoHeading = 0;
+  byte magnetoSpeed = 0;
+  #endif
+
+  bool useGPS = true;
+  Coordinate gpsLastLocation = {};
+  byte gpsPrecision = 0;
   // CAP heading in DEG 0-360
-  word tripHeading = 0;
-
+  word gpsHeading = 0;
   // Our current speed
-  byte tripSpeed = 0;
-
-  // Our maximum speed
-  byte tripMaxSpeed = 0;
-
-  // Lifetime distance since last device reset
-  unsigned long tripLifetime = 0;
+  word gpsSpeed = 0;
 
   // Total distance (eg day/stage)
   unsigned long tripTotal = 0;
@@ -115,8 +130,6 @@ struct State {
 //
 
 void setup(void)  {
-  Serial.begin(9600);
-
   buttonUp.onPress(onButtonPressed);
   buttonUp.onRelease(150, onButtonReleased);
   buttonUp.onHoldRepeat(BUTTON_HOLD_DELAY, BUTTON_HOLD_REPEAT, onButtonHeld);
@@ -125,15 +138,38 @@ void setup(void)  {
   buttonDown.onRelease(150, onButtonReleased);
   buttonDown.onHoldRepeat(BUTTON_HOLD_DELAY, BUTTON_HOLD_REPEAT, onButtonHeld);
 
-  pinMode(SPEED_PIN, INPUT);
-
-  // magneto.begin();
-
-  gpsSerial.begin(9600);
+  #ifdef DEBUG
+  Serial.begin(9600);
+  #endif
 
   lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN);
   lcd.clear();
   lcd.setBatteryLevel(0);
+
+  if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
+    lcd.print("SD ERR");
+    while(true);
+  }
+  lcd.print("SD  ON");
+  delay(500);
+
+  #ifdef USE_SPEED_SENSOR
+  pinMode(SPEED_PIN, INPUT);
+  lcd.print("SPD ON");
+  delay(500);
+  #endif
+
+  #ifdef USE_MAGNETOMETER
+  // magneto.begin();
+  // delay(500);
+  #endif
+
+  gpsPort.begin(GPS_BAULD_RATE);
+  lcd.print("GPS ON");
+  delay(500);
+
+  lcd.print("READY");
+  delay(1500);
 }
 
 void loop(void) {
@@ -151,18 +187,21 @@ void loop(void) {
     screenUpdateBatteryIndicator(state);
   }
 
+  /*
   if (currentMillis - sdCardMillis >= 3 * UI_REFRESH_INTERVAL) {
     sdCardMillis = currentMillis;
-    String dataString = "SD Millis: " + String(sdCardMillis);
-    sdWrite(dataString);
+    //sdWrite(dataString);
   }
+  */
 
+  #ifdef USE_SPEED_SENSOR
   // WIP: This will need to be interrupt for the wheel sensor, placeholder
   //      for now to verify the idea...
   int val = analogRead(SPEED_PIN);
   if(val < 100) {
      Serial.print(F("Magnet close!"));
   }
+  #endif
 }
 
 //
@@ -185,7 +224,6 @@ unsigned long calculateTripValue(unsigned long current,
 //
 
 void screenUpdate(State& state) {
-  lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN);
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
     lcd.print(state.tripTotal / 1000.0, 1);
@@ -194,16 +232,15 @@ void screenUpdate(State& state) {
     lcd.print(state.tripPartial / 1000.0, state.decimals);
     break;
   case SCREEN_HEADING:
-    // I don't like to check the gps here...
-    gps.course.isValid()
-      ? lcd.print(state.tripHeading, 0)
-      : lcd.print(state.magnetoHeading, 0);
+    char heading[5];
+    sprintf(heading, "%u*", state.gpsHeading);
+    lcd.print(heading, true);
     break;
   case SCREEN_SPEED:
-    lcd.print(state.tripSpeed, 0);
+    lcd.print((long)state.gpsSpeed);
     break;
   case SCREEN_MENU:
-    lcd.print(9999, 0);
+    lcd.print("MENU");
     break;
   }
 }
@@ -221,7 +258,7 @@ void onButtonReleased(Button& btn, uint16_t duration) {
 void onButtonPressed(Button& btn) {
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
-    state.tripTotal = calculateTripValue(state.tripTotal, 10, btn.is(buttonUp), false);
+    state.tripTotal = calculateTripValue(state.tripTotal, 100, btn.is(buttonUp), false);
     break;
   case SCREEN_PARTIAL:
     state.tripPartial = calculateTripValue(state.tripPartial, 10, btn.is(buttonUp), false);
@@ -235,13 +272,14 @@ void onButtonPressed(Button& btn) {
 }
 
 void onButtonHeld(Button& btn, uint16_t duration, uint8_t repeat_count) {
-  bool reset = buttonUp.isPressed() && buttonDown.isPressed();
+  bool isReset = buttonUp.isPressed() && buttonDown.isPressed();
+
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
-    state.tripTotal = reset ? 0 : calculateTripValue(state.tripTotal, 10, btn.is(buttonUp), reset);
+    state.tripTotal = calculateTripValue(state.tripTotal, 100, btn.is(buttonUp), isReset);
     break;
   case SCREEN_PARTIAL:
-    state.tripPartial = reset ? 0 : calculateTripValue(state.tripPartial, 10, btn.is(buttonUp), reset);
+    state.tripPartial = calculateTripValue(state.tripPartial, 10, btn.is(buttonUp), isReset);
     break;
   case SCREEN_MENU:
     break;
@@ -259,12 +297,12 @@ void onButtonHeld(Button& btn, uint16_t duration, uint8_t repeat_count) {
  * of bars based on the GPS Satelites at the moment.
  */
 void screenUpdateBatteryIndicator(State& state) {
-  byte level;
-  if (state.gpsPrecision == -1) {
+  byte level = 0;
+  if (state.gpsPrecision == UINT8_MAX) {
     state.gpsPrecision = 0;
     level = 0;
   } else if (state.gpsPrecision == 0) {
-    state.gpsPrecision = -1;
+    state.gpsPrecision = UINT8_MAX;
     level = 3;
   } else {
     if (state.gpsPrecision < 3) {
@@ -279,22 +317,63 @@ void screenUpdateBatteryIndicator(State& state) {
 }
 
 //
+// SD Card
+//
+
+bool sdPrepare(char *path) {
+  File file = SD.open(path, O_RDWR | O_CREAT | O_TRUNC);
+  if (!file) { return false; }
+  file.println("UPD,SAT,-,LAT,LON,DIST,CAP,SPD,-,LATERR,LONERR");
+  file.close();
+  return true;
+}
+
+bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long distance) {
+  File file = SD.open(SD_GPS_FILE, O_RDWR);
+  if (!file) { return false; }
+
+  char latString[10];
+  dtostrf(fix.location.lat(), 9, 6, latString);
+
+  char lonString[10];
+  dtostrf(fix.location.lng(), 9, 6, lonString);
+
+  char line[50];
+  sprintf(line,
+          "%s,%u,%s,%s,%u,%u,%u,%u,%u",
+          update ? "Y" : "N",
+          state.gpsPrecision,
+          latString,
+          lonString,
+          distance,
+          state.gpsHeading,
+          state.gpsSpeed,
+          0,
+          0
+          );
+  file.println(line);
+  file.close();
+
+  #ifdef DEBUG
+  Serial.println(line);
+  #endif
+}
+
+//
 // GPS
 //
+#ifdef GPS_USE_TINYGPS
 void gpsUpdate(State& state, double minDistanceTreshold) {
-  while (gpsSerial.available() > 0) {
-    if (gps.encode(gpsSerial.read())) {
+  while (gpsPort.available() > 0) {
+    if (gps.encode(gpsPort.read())) {
       if (gps.satellites.isValid() && gps.satellites.isUpdated()) {
-        state.gpsPrecision = gps.satellites.value();
+        state.gpsPrecision = (byte)gps.satellites.value();
       }
       if (gps.course.isValid() && gps.course.isUpdated()) {
-        state.tripHeading = gps.course.deg();
+        state.gpsHeading = (word)round(gps.course.deg());
       }
       if (gps.speed.isValid() && gps.speed.isUpdated()) {
-        state.tripSpeed = gps.speed.kmph();
-        if (state.tripSpeed > state.tripMaxSpeed) {
-          state.tripMaxSpeed = state.tripSpeed;
-        }
+        state.gpsSpeed = (word)round(gps.speed.kmph());
       }
 
       // This needs to be verified for accuracy, so far I'm getting about 5%
@@ -308,61 +387,127 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
       // accurate than TinyGPSPlus
       // https://github.com/SlashDevin/NeoGPS
       //
-      // One thing also is to stop counting distance at low speeds like < 5kmh
-      //
       // Another distance calculation may come from here, that avoids loads of
       // trigonometry but need to verify the accuracy.
       // https://www.instructables.com/Distance-measuring-and-more-device-using-Arduino-a/
       //
-      if (gps.location.isValid() && gps.location.isUpdated()) {
-        if (state.gpsLastLocation.lat == 0.0 && state.gpsLastLocation.lng == 0.0) {
+      if (gps.location.isValid() && gps.location.isUpdated()
+          && gps.date.isValid() && gps.time.isValid()) {
+        if (state.gpsLastLocation.lat == 0.0) {
           state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
         } else {
-          unsigned long distance =
-            (unsigned long)TinyGPSPlus::distanceBetween(gps.location.lat(),
-                                                        gps.location.lng(),
-                                                        state.gpsLastLocation.lat,
-                                                        state.gpsLastLocation.lng);
           // Should we update or not?
           bool update = true;
 
           // If the location age is older than 1500ms we most likely don't have
           // gps fix anymore and we need to wait for new fix.
           if (update)
-            update = gps.location.age() < (unsigned long)1500;
+            update = gps.location.age() < 1500;
 
           // When speed is very low we risk having loads of error due to
           // coordinates being too close together
           if (update)
-            update = state.tripSpeed > (byte)5;
+            update = state.gpsSpeed > 5 && state.gpsSpeed < 300;
+
+          unsigned long distance =
+            (unsigned long)TinyGPSPlus::distanceBetween(gps.location.lat(),
+                                                        gps.location.lng(),
+                                                        state.gpsLastLocation.lat,
+                                                        state.gpsLastLocation.lng);
 
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
           if(update)
-            update = distance > (unsigned long)4;
+            update = distance > 4 && distance < 200;
 
           // If we think we should update distance, lets do it
           if (update) {
             state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
-            state.tripLifetime += distance;
             state.tripPartial += distance;
             state.tripTotal += distance;
           }
+          
+          // Log data to SD card
+          sdGPSLogWrite(state, gps, update, distance);
         }
       }
     }
   }
 }
+#endif
+
+#ifdef GPS_USE_NEOGPS
+void gpsUpdate(State& state, double minDistanceTreshold) {
+   while (gps.available(gpsPort)) {
+    gps_fix fix = gps.read();
+
+    if (fix.valid.satellites) {
+      state.gpsPrecision = fix.satellites;
+    }
+    if (fix.valid.speed) {
+      // Too slow, zero out the speed
+      if(fix.speed_mkn() < 1000) {
+        fix.spd.whole = 0;
+        fix.spd.frac  = 0;
+      }
+      state.gpsSpeed = round(fix.speed_kph());
+    }
+    if (fix.valid.heading) {
+      state.gpsHeading = fix.heading_cd();
+    }
+    if (fix.valid.location) {
+      if (state.gpsLastLocation.lat() == 0 && state.gpsLastLocation.lon() == 0) {
+        state.gpsLastLocation = fix.location;
+      } else {
+        float distanceKM = fix.location.DistanceKm(state.gpsLastLocation);
+        unsigned long distanceM = round(distanceKM * (float)1000.0);
+
+        // Should we update or not?
+        bool update = true;
+
+        // If the location age is older than 1500ms we most likely don't have
+        // gps fix anymore and we need to wait for new fix.
+        // if (update)
+        //   update = fix.location.age < (unsigned long)1500;
+
+        // When speed is very low we risk having loads of error due to
+        // coordinates being too close together
+        if (update)
+          update = state.gpsSpeed > (byte)5;
+
+        // Don't update distance when the distance is not within reasonable
+        // difference. GPS has +- 2-3 meter possible error/noise...
+        if(update)
+          update = distanceM > 5 && distanceM < 200;
+
+        // If we think we should update distance, lets do it
+        if (update) {
+          state.gpsLastLocation = fix.location;
+          state.tripLifetime += distanceM;
+          state.tripPartial += distanceM;
+          state.tripTotal += distanceM;
+        }
+
+        // Log data to SD card
+        sdGPSLogWrite(state, fix, update, distanceM);
+      }
+    }
+  }
+}
+#endif
 
 //
-// Speed
+// Speed sensor
 //
 
+#ifdef USE_SPEED_SENSOR
 // TODO....
+#endif
 
 //
 // Magnetometer
 //
+#ifdef USE_MAGNETOMETER
 float calculateMagnetoHeading(Adafruit_HMC5883_Unified &mag, float declinationAngle) {
   // Get a new sensor event
   sensors_event_t event; 
@@ -389,19 +534,4 @@ float calculateMagnetoHeading(Adafruit_HMC5883_Unified &mag, float declinationAn
   // Convert radians to degrees for readability.
   return heading * 180/M_PI; 
 }
-
-void sdWrite(String& data) {
-  if (!SD.begin(9)) {
-    Serial.println(F("Can't initialize SD Card..."));
-    return; 
-  }
-
-  File file = SD.open("data.txt", FILE_WRITE);
-  if (!file) {
-    Serial.println(F("Can't open the data.txt"));
-    file.close();
-    return; 
-  }
-  file.println(data);
-  file.close();
-}
+#endif
