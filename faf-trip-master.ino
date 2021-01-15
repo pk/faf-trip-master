@@ -371,7 +371,7 @@ bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long di
   char lonString[11];
   dtostrf(fix.location.lng(), 10, 7, lonString);
 
-  char line[50];
+  char line[51];
   snprintf(line,
            sizeof(line),
            "%s,%u,%s,%s,%u,%u,%u,%u,%u",
