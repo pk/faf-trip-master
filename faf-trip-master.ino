@@ -372,35 +372,34 @@ void screenUpdateBatteryIndicator(State& state) {
 bool sdPrepare(char *path) {
   File file = SD.open(path, O_RDWR | O_CREAT | O_TRUNC);
   if (!file) { return false; }
-  file.println("UPD,SAT,-,LAT,LON,DIST,CAP,SPD,-,LATERR,LONERR");
+  file.println("UPD,SAT,LAT,LON,DIST,CAP,SPD,LATERR,LONERR");
   file.close();
   return true;
 }
 
 bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long distance) {
-  File file = SD.open(SD_GPS_FILE, O_RDWR);
+  File file = SD.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND);
   if (!file) { return false; }
 
-  char latString[11];
-  dtostrf(fix.location.lat(), 10, 7, latString);
+  char latString[10];
+  dtostrf(fix.location.lat(), 9, 6, latString);
 
-  char lonString[11];
-  dtostrf(fix.location.lng(), 10, 7, lonString);
+  char lngString[10];
+  dtostrf(fix.location.lng(), 9, 6, lngString);
 
-  char line[51];
+  char line[51] = {0};
   snprintf(line,
            sizeof(line),
-           "%s,%u,%s,%s,%u,%u,%u,%u,%u",
+           "%s,%u,%s,%s,%u,%u,%u",
            update ? "Y" : "N",
-           state.gpsPrecision,
+           (uint8_t)state.gpsPrecision,
            latString,
-           lonString,
+           lngString,
            distance,
-           state.gpsHeading,
-           state.gpsSpeed,
-           0,
-           0
-           );
+           (uint8_t)state.gpsHeading,
+           (uint8_t)state.gpsSpeed);
+  file.print(line);
+  snprintf(line, sizeof(line), ",%u,%u", (uint8_t)42, (uint8_t)42);
   file.println(line);
   file.close();
 
