@@ -37,6 +37,16 @@
  * 
  * Compile & Deploy
  *  arduino-cli compile -b arduino:avr:nano -p /dev/cu.usbserial-A947ST0C --upload
+ * 
+ * Hardware
+ *   https://www.laskarduino.cz/6-mistny-sedmisegmentovy-lcd-displej-2-4--ht1621--bily/
+ *   https://www.laskarduino.cz/arduino-nano-r3--atmega328p-klon--pripajene-piny/
+ *   https://www.laskarduino.cz/arduino-gps-modul-gy-neo6mv2/
+ *   https://www.laskarduino.cz/microsd-card-modul-spi/
+ *   https://www.laskarduino.cz/mikro-step-down-menic--nastavitelny/
+ * 
+ *   Final board: STM32 ARM for 32-bit precission
+ *   https://www.laskarduino.cz/bluepill-arm-stm32-stm32f103c8-vyvojova-deska/
  */
 #define DEBUG
 // #define USE_WHEEL_SENSOR
@@ -74,7 +84,7 @@ volatile byte wheelRevs = 0;
 #endif
 
 // GPS Unit
-//#define GPS_USE_HWSERIAL
+#define GPS_USE_HWSERIAL
 #define GPS_USE_TINYGPS
 #ifdef GPS_USE_TINYGPS
   #define GPS_BAULD_RATE 9600
@@ -106,8 +116,8 @@ SdFat SD;
 #define UI_REFRESH_INTERVAL    500
 #define UI_REFRESH_INTERVAL_2X 1000 
 #define UI_REFRESH_INTERVAL_3X 1500
-#define MAX_TRIP_VALUE 99999
-#define MIN_TRIP_VALUE 0
+#define MAX_TRIP_VALUE 99999.0
+#define MIN_TRIP_VALUE 0.0
 unsigned long uiMillis = 0;
 unsigned long sdCardMillis = 0;
 
@@ -153,10 +163,10 @@ struct State {
   word gpsSpeed = 0;
 
   // Total distance (eg day/stage)
-  unsigned long tripTotal = 0;
+  double tripTotal = 0;
 
   // Partial distance (point - to point)
-  unsigned long tripPartial = 0;
+  double tripPartial = 0;
 } state;
 
 //
@@ -249,13 +259,13 @@ void loop(void) {
 // Utilities
 //
 
-unsigned long calculateTripValue(unsigned long current,
+unsigned long calculateTripValue(double current,
                                  byte increment,
                                  bool isIncrement,
                                  bool reset) {
   if (reset) return 0;
-  long value = current + (isIncrement ? 1 : -1) * increment;
-  if (value <= (long)MIN_TRIP_VALUE) { return MIN_TRIP_VALUE; }
+  long value = current + (isIncrement ? 1.0 : -1.0) * increment;
+  if (value <= MIN_TRIP_VALUE) { return MIN_TRIP_VALUE; }
   if (value >= MAX_TRIP_VALUE) { return MAX_TRIP_VALUE; }
   return value;
 }
@@ -307,10 +317,10 @@ void onButtonReleased(Button& btn, uint16_t duration) {
 void onButtonPressed(Button& btn) {
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
-    state.tripTotal = calculateTripValue(state.tripTotal, 100, btn.is(buttonUp), false);
+    state.tripTotal = calculateTripValue(state.tripTotal, 100.0, btn.is(buttonUp), false);
     break;
   case SCREEN_PARTIAL:
-    state.tripPartial = calculateTripValue(state.tripPartial, 10, btn.is(buttonUp), false);
+    state.tripPartial = calculateTripValue(state.tripPartial, 10.0, btn.is(buttonUp), false);
     break;
   case SCREEN_MENU:
     break;
@@ -325,10 +335,10 @@ void onButtonHeld(Button& btn, uint16_t duration, uint8_t repeat_count) {
 
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
-    state.tripTotal = calculateTripValue(state.tripTotal, 100, btn.is(buttonUp), isReset);
+    state.tripTotal = calculateTripValue(state.tripTotal, 100.0, btn.is(buttonUp), isReset);
     break;
   case SCREEN_PARTIAL:
-    state.tripPartial = calculateTripValue(state.tripPartial, 10, btn.is(buttonUp), isReset);
+    state.tripPartial = calculateTripValue(state.tripPartial, 10.0, btn.is(buttonUp), isReset);
     break;
   case SCREEN_MENU:
     break;
@@ -377,7 +387,7 @@ bool sdPrepare(char *path) {
   return true;
 }
 
-bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long distance) {
+bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, double distance) {
   File file = SD.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND);
   if (!file) { return false; }
 
@@ -387,19 +397,26 @@ bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long di
   char lngString[10];
   dtostrf(fix.location.lng(), 9, 6, lngString);
 
-  char line[51] = {0};
+  char dstString[9];
+  dtostrf(distance, 8, 4, dstString);
+
+  char line[31] = {0};
   snprintf(line,
            sizeof(line),
-           "%s,%u,%s,%s,%u,%u,%u",
+           "%s,%u,%s,%s,%s",
            update ? "Y" : "N",
            (uint8_t)state.gpsPrecision,
            latString,
            lngString,
-           distance,
-           (uint8_t)state.gpsHeading,
-           (uint8_t)state.gpsSpeed);
+           dstString);
   file.print(line);
-  snprintf(line, sizeof(line), ",%u,%u", (uint8_t)42, (uint8_t)42);
+  snprintf(line,
+           sizeof(line),
+           ",%u,%u,%u,%u",
+           (uint8_t)state.gpsHeading,
+           (uint8_t)state.gpsSpeed,
+           (uint8_t)42,
+           (uint8_t)42);
   file.println(line);
   file.close();
 
@@ -443,6 +460,7 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
       if (gps.location.isValid() && gps.location.isUpdated()
           && gps.date.isValid() && gps.time.isValid()) {
         if (state.gpsLastLocation.lat == 0.0) {
+          // FIXME: This should probably only happen when we think we should UPDATE!
           state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
         } else {
           // Should we update or not?
@@ -462,17 +480,22 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
           if (update)
             update = state.gpsSpeed > (word)5 && state.gpsSpeed < (word)300;
 
-          unsigned long distance =
-            (unsigned long)TinyGPSPlus::distanceBetween(gps.location.lat(),
-                                                        gps.location.lng(),
-                                                        state.gpsLastLocation.lat,
-                                                        state.gpsLastLocation.lng);
-          unsigned long distance = round(d);
+          /*
+          if (update)
+            update = abs(gps.location.lat() - state.gpsLastLocation.lat) > 0.000001
+                     || abs(gps.location.lng() - state.gpsLastLocation.lng) > 0.000001;
+          */
+
+          double distance =
+            TinyGPSPlus::distanceBetween(gps.location.lat(),
+                                         gps.location.lng(),
+                                         state.gpsLastLocation.lat,
+                                         state.gpsLastLocation.lng);
 
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
           if(update)
-            update = distance > 4UL && distance < 200UL;
+            update = distance > 4.0 && distance < 200.0;
 
           // If we think we should update distance, lets do it
           if (update) {
