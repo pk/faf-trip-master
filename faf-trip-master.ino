@@ -58,7 +58,7 @@ volatile byte wheelRevs = 0;
 #endif
 
 // GPS Unit
-#define GPS_USE_HWSERIAL
+//#define GPS_USE_HWSERIAL
 #define GPS_USE_TINYGPS
 #ifdef GPS_USE_TINYGPS
   #define GPS_BAULD_RATE 9600
