@@ -23,7 +23,7 @@
  *  arduino-cli compile -b arduino:avr:nano -p /dev/cu.usbserial-A947ST0C --upload
  */
 #define DEBUG
-#define USE_WHEEL_SENSOR
+// #define USE_WHEEL_SENSOR
 // #define USE_COMPASS
 
 // Buttons
