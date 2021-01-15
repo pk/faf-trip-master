@@ -58,15 +58,21 @@ volatile byte wheelRevs = 0;
 #endif
 
 // GPS Unit
+#define GPS_USE_HWSERIAL
 #define GPS_USE_TINYGPS
 #ifdef GPS_USE_TINYGPS
-  #include <TinyGPS++.h>
-  #include <NeoSWSerial.h>
   #define GPS_BAULD_RATE 9600
-  #define GPS_RX_PIN 4
-  #define GPS_TX_PIN 5
+  #ifdef GPS_USE_HWSERIAL
+    #define gpsPort Serial
+  #else
+    #include <NeoSWSerial.h>
+    //                  RX - on Arduino TX on GPS
+    //                     TX - on Arduino RX on GPS
+    NeoSWSerial gpsPort(5, 4);
+  #endif
+
+  #include <TinyGPS++.h>
   TinyGPSPlus gps;
-  NeoSWSerial gpsPort(GPS_RX_PIN, GPS_RX_PIN);
 #else
   #define GPS_USE_NEOGPS
   #include <NMEAGPS.h>
@@ -81,7 +87,9 @@ volatile byte wheelRevs = 0;
 SdFat SD;
 
 // UI
-#define UI_REFRESH_INTERVAL 500
+#define UI_REFRESH_INTERVAL    500
+#define UI_REFRESH_INTERVAL_2X 1000 
+#define UI_REFRESH_INTERVAL_3X 1500
 #define MAX_TRIP_VALUE 99999
 #define MIN_TRIP_VALUE 0
 unsigned long uiMillis = 0;
@@ -148,43 +156,49 @@ void setup(void)  {
   buttonDown.onRelease(150, onButtonReleased);
   buttonDown.onHoldRepeat(BUTTON_HOLD_DELAY, BUTTON_HOLD_REPEAT, onButtonHeld);
 
-  #ifdef DEBUG
-  Serial.begin(9600);
-  #endif
-
   lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN);
   lcd.clear();
   lcd.setBatteryLevel(0);
 
+  #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
+    Serial.begin(9600);
+  #endif
+  #ifdef GPS_USE_HWSERIAL
+    lcd.print("SrP  H");
+  #else
+    lcd.print("SrP  S");
+  #endif
+  delay(UI_REFRESH_INTERVAL_2X);
+
   if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
-    lcd.print("Sd Err");
+    lcd.print("Sd  Er");
     while(true);
   }
   lcd.print("Sd  On");
-  delay(500);
+  delay(UI_REFRESH_INTERVAL_2X);
 
   #ifdef USE_WHEEL_SENSOR
   pinMode(WHEEL_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), wheelRevsCounter, FALLING);
   lcd.print("SPd On");
-  delay(500);
+  delay(UI_REFRESH_INTERVAL_2X);
   #endif
 
   #ifdef USE_COMPASS
   if (!compass.begin()) {
-    lcd.print("CPS Err");
+    lcd.print("CPS Er");
     while(true);
   }
   lcd.print("CPS On");
-  delay(500);
+  delay(UI_REFRESH_INTERVAL_2X);
   #endif
 
   gpsPort.begin(GPS_BAULD_RATE);
   lcd.print("GPS On");
-  delay(500);
+  delay(UI_REFRESH_INTERVAL_2X);
 
   lcd.print("-ridE-");
-  delay(1500);
+  delay(UI_REFRESH_INTERVAL_3X);
 }
 
 void loop(void) {
@@ -201,6 +215,10 @@ void loop(void) {
   #endif
 
   gpsUpdate(state, 4.0);
+  if (millis() > 10000 && gps.charsProcessed() < 10) {
+    lcd.print("GPS E1");
+    while(true);
+  }
 
   // Update data and display every display interval
   unsigned long currentMillis = millis();
@@ -209,14 +227,6 @@ void loop(void) {
     screenUpdate(state);
     screenUpdateBatteryIndicator(state);
   }
-
-  /*
-  if (currentMillis - sdCardMillis >= 3 * UI_REFRESH_INTERVAL) {
-    sdCardMillis = currentMillis;
-    //sdWrite(dataString);
-  }
-  */
-
 }
 
 //
@@ -378,7 +388,7 @@ bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, unsigned long di
   file.println(line);
   file.close();
 
-  #ifdef DEBUG
+  #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
   Serial.println(line);
   #endif
 }
