@@ -455,12 +455,12 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
           // If the location age is older than 1500ms we most likely don't have
           // gps fix anymore and we need to wait for new fix.
           if (update)
-            update = gps.location.age() < 1500;
+            update = gps.location.age() < 1500UL;
 
           // When speed is very low we risk having loads of error due to
           // coordinates being too close together
           if (update)
-            update = state.gpsSpeed > 5 && state.gpsSpeed < 300;
+            update = state.gpsSpeed > (word)5 && state.gpsSpeed < (word)300;
 
           unsigned long distance =
             (unsigned long)TinyGPSPlus::distanceBetween(gps.location.lat(),
@@ -471,7 +471,7 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
           if(update)
-            update = distance > 4 && distance < 200;
+            update = distance > 4UL && distance < 200UL;
 
           // If we think we should update distance, lets do it
           if (update) {
