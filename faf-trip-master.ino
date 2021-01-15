@@ -448,6 +448,10 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
           // Should we update or not?
           bool update = true;
 
+          // We need to have enough satelites, which is 4 for reasonable fix
+          if (update)
+            update = state.gpsPrecision >= (byte)4;
+
           // If the location age is older than 1500ms we most likely don't have
           // gps fix anymore and we need to wait for new fix.
           if (update)
