@@ -157,10 +157,10 @@ void setup(void)  {
   lcd.setBatteryLevel(0);
 
   if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
-    lcd.print("SD ERR");
+    lcd.print("Sd Err");
     while(true);
   }
-  lcd.print("SD  ON");
+  lcd.print("Sd  On");
   delay(500);
 
   #ifdef USE_WHEEL_SENSOR
@@ -176,10 +176,10 @@ void setup(void)  {
   #endif
 
   gpsPort.begin(GPS_BAULD_RATE);
-  lcd.print("GPS ON");
+  lcd.print("GPS On");
   delay(500);
 
-  lcd.print("READY");
+  lcd.print("-ridE-");
   delay(1500);
 }
 
