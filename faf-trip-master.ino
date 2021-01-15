@@ -467,6 +467,7 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
                                                         gps.location.lng(),
                                                         state.gpsLastLocation.lat,
                                                         state.gpsLastLocation.lng);
+          unsigned long distance = round(d);
 
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
