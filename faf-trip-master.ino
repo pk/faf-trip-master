@@ -23,9 +23,7 @@
  * Compile & Deploy
  *  arduino-cli compile -b arduino:avr:nano -p /dev/cu.usbserial-A947ST0C --upload
  */
-#define DEBUG 1
-// #define USE_SPEED_SENSOR
-// #define USE_MAGNETOMETER
+// #define USE_COMPASS
 
 // Buttons
 #include <Button.h>
@@ -44,12 +42,12 @@ PushButton buttonDown = PushButton(A1, ENABLE_INTERNAL_PULLUP);
 #define LCD_DATA_PIN 8
 HT1621 lcd;
 
-// Magnetometer sensor
-#ifdef USE_MAGNETOMETER
+// Compass sensor
+#ifdef USE_COMPASS
   #include <Adafruit_HMC5883_U.h>
   #include <Adafruit_Sensor.h>
   #include <Wire.h>
-  Adafruit_HMC5883_Unified magneto = Adafruit_HMC5883_Unified(12345);
+  Adafruit_HMC5883_Unified compass = Adafruit_HMC5883_Unified(12345);
 #endif
 
 // Speed
@@ -104,10 +102,9 @@ struct State {
   // (this influences increment 10 or 100 m when adjusting distance)
   byte decimals = 2;
 
-  #ifdef USE_MAGNETOMETER
-  float magnetoDeclinationAngle = 0.0698132;
-  word magnetoHeading = 0;
-  byte magnetoSpeed = 0;
+  #ifdef USE_COMPASS
+  float compassDeclinationAngle = 0.0698132;
+  word compassHeading = 0;
   #endif
 
   bool useGPS = true;
@@ -159,8 +156,8 @@ void setup(void)  {
   delay(500);
   #endif
 
-  #ifdef USE_MAGNETOMETER
-  // magneto.begin();
+  #ifdef USE_COMPASS
+  // compass.begin();
   // delay(500);
   #endif
 
@@ -176,7 +173,9 @@ void loop(void) {
   buttonUp.update();
   buttonDown.update();
 
-  // state.magnetoHeading = calculateMagnetoHeading(magneto, state.magnetoDeclinationAngle);
+  #ifdef USE_COMPASS
+  state.compassHeading = calculateCompassHeading(compass, state.compassDeclinationAngle);
+  #endif
   gpsUpdate(state, 4.0);
 
   // Update data and display every display interval
@@ -506,10 +505,10 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
 #endif
 
 //
-// Magnetometer
+// Compass
 //
-#ifdef USE_MAGNETOMETER
-float calculateMagnetoHeading(Adafruit_HMC5883_Unified &mag, float declinationAngle) {
+#ifdef USE_COMPASS
+float calculateCompassHeading(Adafruit_HMC5883_Unified &mag, float declinationAngle) {
   // Get a new sensor event
   sensors_event_t event; 
   mag.getEvent(&event);
