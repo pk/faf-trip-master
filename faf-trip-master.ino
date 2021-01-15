@@ -4,7 +4,6 @@
  * 
  * TODO
  *   - Menu needs to be implemented
- *   - Distance & Speed from Hall sensor, this just needs some storage & interrupt
  *   - Add dhop handling (https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps)
  * 
  * Libraries
@@ -23,6 +22,8 @@
  * Compile & Deploy
  *  arduino-cli compile -b arduino:avr:nano -p /dev/cu.usbserial-A947ST0C --upload
  */
+#define DEBUG
+#define USE_WHEEL_SENSOR
 // #define USE_COMPASS
 
 // Buttons
@@ -51,7 +52,10 @@ HT1621 lcd;
 #endif
 
 // Speed
-#define SPEED_PIN A2
+#ifdef USE_WHEEL_SENSOR
+#define WHEEL_PIN 2
+volatile byte wheelRevs = 0;
+#endif
 
 // GPS Unit
 #define GPS_USE_TINYGPS
@@ -107,6 +111,15 @@ struct State {
   word compassHeading = 0;
   #endif
 
+  #ifdef USE_WHEEL_SENSOR
+           word wheelCircumference = 2045;
+           word wheelSpeed = 0;
+  unsigned long wheelPartial = 0;
+  unsigned long wheelPreviousTotal = 0;
+  unsigned long wheelTotal = 0;
+  unsigned long wheelPreviousMillisSpeed = 0;
+  #endif
+
   bool useGPS = true;
   Coordinate gpsLastLocation = {};
   byte gpsPrecision = 0;
@@ -150,9 +163,10 @@ void setup(void)  {
   lcd.print("SD  ON");
   delay(500);
 
-  #ifdef USE_SPEED_SENSOR
-  pinMode(SPEED_PIN, INPUT);
-  lcd.print("SPD ON");
+  #ifdef USE_WHEEL_SENSOR
+  pinMode(WHEEL_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), wheelRevsCounter, FALLING);
+  lcd.print("SPd On");
   delay(500);
   #endif
 
@@ -173,9 +187,15 @@ void loop(void) {
   buttonUp.update();
   buttonDown.update();
 
+  #ifdef USE_WHEEL_SENSOR
+  wheelSensorUpdate();
+  wheelCalculateSpeed();
+  #endif
+
   #ifdef USE_COMPASS
   state.compassHeading = calculateCompassHeading(compass, state.compassDeclinationAngle);
   #endif
+
   gpsUpdate(state, 4.0);
 
   // Update data and display every display interval
@@ -228,7 +248,11 @@ void screenUpdate(State& state) {
     lcd.print(state.tripTotal / 1000.0, 1);
     break;
   case SCREEN_PARTIAL:
+    #ifdef USE_WHEEL_SENSOR
+    lcd.print(state.wheelPartial / 1000.0, state.decimals);
+    #else
     lcd.print(state.tripPartial / 1000.0, state.decimals);
+    #endif
     break;
   case SCREEN_HEADING:
     char heading[5];
@@ -236,7 +260,11 @@ void screenUpdate(State& state) {
     lcd.print(heading, true);
     break;
   case SCREEN_SPEED:
+    #ifdef USE_WHEEL_SENSOR
+    lcd.print((long)state.wheelSpeed);
+    #else
     lcd.print((long)state.gpsSpeed);
+    #endif
     break;
   case SCREEN_MENU:
     lcd.print("MENU");
@@ -500,8 +528,36 @@ void gpsUpdate(State& state, double minDistanceTreshold) {
 // Speed sensor
 //
 
-#ifdef USE_SPEED_SENSOR
-// TODO....
+#ifdef USE_WHEEL_SENSOR
+// Interrupt Service Routine (ISR)
+void wheelRevsCounter() {
+  wheelRevs++;
+}
+
+void wheelSensorUpdate() {
+  byte revsTmp = wheelRevs;
+  if(revsTmp > 0) {
+    state.wheelPartial += ((state.wheelCircumference / 1000.0) * revsTmp) + 0.5;
+    state.wheelTotal += ((state.wheelCircumference  / 1000.0) * revsTmp) + 0.5;
+    wheelRevs -= revsTmp;  
+  }
+}
+
+void wheelCalculateSpeed() {
+  unsigned long currentMillis = millis();
+  if (currentMillis - state.wheelPreviousMillisSpeed >= 1000) {
+    state.wheelPreviousMillisSpeed = currentMillis;
+
+    // m/s -> km/h
+    float speed = (float)(state.wheelTotal - state.wheelPreviousTotal) * 3.6; 
+    // moving average
+    speed = (float)state.wheelSpeed + (speed - (float)state.wheelSpeed) / (float)3.0;
+    // Round down < 1 or round normal values
+    state.wheelSpeed = speed < 1.0 ? 0 : speed + 0.5; // Adding 0.5 is the easiest way to round up (int to float trims)
+
+    state.wheelPreviousTotal = state.wheelTotal;
+  }
+}
 #endif
 
 //
