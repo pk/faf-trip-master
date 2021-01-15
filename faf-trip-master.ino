@@ -213,14 +213,6 @@ void loop(void) {
   }
   */
 
-  #ifdef USE_SPEED_SENSOR
-  // WIP: This will need to be interrupt for the wheel sensor, placeholder
-  //      for now to verify the idea...
-  int val = analogRead(SPEED_PIN);
-  if(val < 100) {
-     Serial.print(F("Magnet close!"));
-  }
-  #endif
 }
 
 //
