@@ -3,8 +3,22 @@
  * Version: 0.1
  * 
  * TODO
+ *   - Use PROGMEM for strings and other stuff
+ *     - http://www.gammon.com.au/progmem
+ * 
  *   - Menu needs to be implemented
- *   - Add dhop handling (https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps)
+ * 
+ *   - Add dhop handling
+ *     - (https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps)
+ * 
+ *   - Compass has following problems:
+ *     - If the module is not level it won't give good reading
+ *     - If there is interference we may need to calibrate
+ *     - https://www.best-microcontroller-projects.com/hmc5883l.html
+ *     - https://www.best-microcontroller-projects.com/magnetometer-tilt-compensation.html
+ *     - Alternative HW to what we have:
+ *       - https://www.laskarduino.cz/arduino-kompas-qmc5883l/ <<< Better than HMC5883L which we have
+ *       - https://www.laskarduino.cz/arduino-9dof-gyroskop-akcelerometr-magnetometr-mpu-9250-spi-iic/
  * 
  * Libraries
  *  HT1621 - https://github.com/pk/ht1621-7-seg
