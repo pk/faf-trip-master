@@ -243,6 +243,7 @@ unsigned long calculateTripValue(unsigned long current,
 //
 
 void screenUpdate(State& state) {
+  char lcdStr[7];
   switch (state.activeScreen) {
   case SCREEN_TOTAL:
     lcd.print(state.tripTotal / 1000.0, 1);
@@ -255,9 +256,8 @@ void screenUpdate(State& state) {
     #endif
     break;
   case SCREEN_HEADING:
-    char heading[5];
-    snprintf(heading, sizeof(heading), "%u*", state.gpsHeading);
-    lcd.print(heading, true);
+    snprintf(lcdStr, sizeof(lcdStr), "%u*", state.gpsHeading);
+    lcd.print(lcdStr, true);
     break;
   case SCREEN_SPEED:
     #ifdef USE_WHEEL_SENSOR
