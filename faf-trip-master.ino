@@ -354,9 +354,9 @@ void screenUpdateBatteryIndicator(State& state) {
     state.gpsPrecision = UINT8_MAX;
     level = 3;
   } else {
-    if (state.gpsPrecision < 3) {
+    if (state.gpsPrecision < 4) {
       level = 1;
-    } else if (state.gpsPrecision >= 3 && state.gpsPrecision <= 5) {
+    } else if (state.gpsPrecision >= 4 && state.gpsPrecision <= 6) {
       level = 2;
     } else {
       level = 3;
