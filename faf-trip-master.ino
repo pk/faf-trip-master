@@ -171,8 +171,12 @@ void setup(void)  {
   #endif
 
   #ifdef USE_COMPASS
-  // compass.begin();
-  // delay(500);
+  if (!compass.begin()) {
+    lcd.print("CPS Err");
+    while(true);
+  }
+  lcd.print("CPS On");
+  delay(500);
   #endif
 
   gpsPort.begin(GPS_BAULD_RATE);
