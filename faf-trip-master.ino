@@ -17,6 +17,8 @@
  * 
  *  NeoGPS - https://github.com/SlashDevin/NeoGPS
  * 
+ *  NeoSWSerial - https://github.com/SlashDevin/NeoSWSerial
+ * 
  *  TinyGPS++ - https://github.com/mikalhart/TinyGPSPlus
  * 
  * Compile & Deploy
