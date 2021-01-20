@@ -142,11 +142,9 @@ struct Coordinate {
 enum Screen {
   SCREEN_TOTAL,
   SCREEN_PARTIAL,
-  //SCREEN_WPARTIAL,
   SCREEN_HEADING,
   SCREEN_SPEED,
-  //SCREEN_WSPEED,
-  SCREEN_MENU
+  SCREEN_MENU,
 };
 
 struct State {
@@ -234,7 +232,6 @@ void setup(void)  {
   #endif
 
   gpsSetup();
-
 }
 
 void loop(void) {
@@ -291,20 +288,15 @@ void screenUpdate(State& state) {
     lcd.print(state.tripTotal / 1000.0, 1);
     break;
   case SCREEN_PARTIAL:
-    #ifdef USE_WHEEL_SENSOR
-    lcd.print(state.wheelPartial / 1000.0, state.decimals);
-    #else
     lcd.print(state.tripPartial / 1000.0, state.decimals);
-    #endif
     break;
   case SCREEN_HEADING:
     snprintf(lcdStr, sizeof(lcdStr), "%u*", state.gpsHeading);
     lcd.print(lcdStr, true);
     break;
   case SCREEN_SPEED:
-    #ifdef USE_WHEEL_SENSOR
-    lcd.print((long)state.wheelSpeed);
-  #endif
+    lcd.print((long)state.gpsSpeed);
+    break;
   case SCREEN_MENU:
     lcd.print("Menu");
     break;
