@@ -3,6 +3,9 @@
  * Version: 0.1
  * 
  * TODO
+ *   - Use better display library implementation
+ *     - https://github.com/hedgehogV/HT1621-lcd/blob/master/src/HT1621.cpp
+ * 
  *   - Use PROGMEM for strings and other stuff
  *     - http://www.gammon.com.au/progmem
  * 
