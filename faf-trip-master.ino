@@ -88,26 +88,17 @@ volatile byte wheelRevs = 0;
 
 // GPS Unit
 #define GPS_USE_HWSERIAL
-#define GPS_USE_TINYGPS
-#ifdef GPS_USE_TINYGPS
-  #define GPS_BAULD_RATE 9600
-  #ifdef GPS_USE_HWSERIAL
-    #define gpsPort Serial
-  #else
-    #include <NeoSWSerial.h>
-    //                  RX - on Arduino TX on GPS
-    //                     TX - on Arduino RX on GPS
-    NeoSWSerial gpsPort(5, 4);
-  #endif
-
-  #include <TinyGPS++.h>
-  TinyGPSPlus gps;
+#ifdef GPS_USE_HWSERIAL
+  #define gpsPort Serial
 #else
-  #define GPS_USE_NEOGPS
-  #include <NMEAGPS.h>
-  #include <GPSport.h>
-  NMEAGPS gps;
+  #include <NeoSWSerial.h>
+  //                  RX - on Arduino TX on GPS
+  //                     TX - on Arduino RX on GPS
+  NeoSWSerial gpsPort(5, 4);
 #endif
+
+#include <TinyGPS++.h>
+TinyGPSPlus gps;
 
 // SDCard
 #define SD_CS_PIN SS
