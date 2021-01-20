@@ -166,7 +166,13 @@ struct State {
   #endif
 
   bool useGPS = true;
-  Coordinate gpsLastLocation = {};
+  Coordinate gpsLocations[5] = {
+    {0.0,0.0}, {0.0,0.0}, {0.0,0.0}, {0.0,0.0}, {0.0,0.0}
+  };
+  Coordinate gpsPreviousLocation = {0.0,0.0};
+  byte gpsLocationsPosition = UINT8_MAX;
+
+
   byte gpsPrecision = 0;
   // CAP heading in DEG 0-360
   word gpsHeading = 0;
@@ -251,7 +257,7 @@ void loop(void) {
   state.compassHeading = calculateCompassHeading(compass, state.compassDeclinationAngle);
   #endif
 
-  gpsUpdate(state, 4.0);
+  gpsUpdate(state);
   if (millis() > 10000 && gps.charsProcessed() < 10) {
     lcd.print("GPS E1");
     while(true);
@@ -392,37 +398,27 @@ bool sdPrepare(char *path) {
   return true;
 }
 
-bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, double distance) {
+bool sdGPSLogWrite(State& state, Coordinate& latest, Coordinate& previous, double distance) {
   File file = SD.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND);
   if (!file) { return false; }
 
-  char latString[10];
-  dtostrf(fix.location.lat(), 9, 6, latString);
-
-  char lngString[10];
-  dtostrf(fix.location.lng(), 9, 6, lngString);
-
-  char dstString[9];
-  dtostrf(distance, 8, 4, dstString);
-
-  char line[31] = {0};
-  snprintf(line,
-           sizeof(line),
-           "%s,%u,%s,%s,%s",
-           update ? "Y" : "N",
-           (uint8_t)state.gpsPrecision,
-           latString,
-           lngString,
-           dstString);
-  file.print(line);
-  snprintf(line,
-           sizeof(line),
-           ",%u,%u,%u,%u",
-           (uint8_t)state.gpsHeading,
-           (uint8_t)state.gpsSpeed,
-           (uint8_t)42,
-           (uint8_t)42);
-  file.println(line);
+  char separator = ',';
+  file.print(state.gpsPrecision);                    file.print(separator);
+  file.print(latest.lat, 6);                         file.print(separator);
+  file.print(latest.lng, 6);                         file.print(separator);
+  file.print(distance, 2);                           file.print(separator);
+  file.print((unsigned int)(state.tripTotal + 0.5)); file.print(separator);
+  file.print(state.gpsSpeed);                        file.print(separator);
+  file.print(state.gpsHeading);
+  #ifdef USE_WHEEL_SENSOR
+  file.print(separator);
+  file.print(state.wheelTotal, 2); file.print(separator);
+  file.println(state.wheelSpeed);
+  #endif
+  file.print(separator);
+  file.print(previous.lat, 6); file.print(separator);
+  file.print(previous.lng, 6); file.print(separator);
+  file.println("");
   file.close();
 
   #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
@@ -448,148 +444,119 @@ void gpsSetup() {
   gpsPort.end();
   gpsPort.begin(115200); 
 }
+
+/**
+ * Calculation of average last location
+ *
+ * GPS readings are averaged at certain window. Before enough elements is
+ * accumulated we handle average by lowering the n.
+ */
+Coordinate gpsAverageLastLocation(State& state) {
+  double avgLat, avgLng = 0.0;
+  byte i = 0;
+  for (; i < 5; i++) {
+    Coordinate location = state.gpsLocations[i];
+    if (location.lat == 0.0 && location.lng == 0.0) break;
+    avgLat += location.lat;
+    avgLng += location.lng;
+  }
+  return { avgLat / i, avgLng / i };
+}
+
+/**
+ * Adds coordinate to the last locations buffer for averaging.
+ */
+void gpsAddLastLocation(State& state, Coordinate coordinate) {
+  byte position = state.gpsLocationsPosition == UINT8_MAX ? 0 : state.gpsLocationsPosition;
+  state.gpsLocations[position] = coordinate;
+  position++;
+  if (position > 4) { position = 0; }
+  state.gpsLocationsPosition = position;
+}
+
+void gpsUpdate(State& state) {
   while (gpsPort.available() > 0) {
     if (gps.encode(gpsPort.read())) {
       if (gps.satellites.isValid() && gps.satellites.isUpdated()) {
         state.gpsPrecision = (byte)gps.satellites.value();
       }
+
       if (gps.course.isValid() && gps.course.isUpdated()) {
         state.gpsHeading = (word)round(gps.course.deg());
       }
+
       if (gps.speed.isValid() && gps.speed.isUpdated()) {
-        state.gpsSpeed = (word)round(gps.speed.kmph());
-      }
-
-      // This needs to be verified for accuracy, so far I'm getting about 5%
-      // under reading comparing to the 2 different apps on the iPhone.
-      // I think some more filering or cleverness is in order.
-      //
-      // Also as Arduino is only 8-bit arithmetic... we may have error at low
-      // speed, but that would not explain the under reading.
-      //
-      // Possibility would be to switch to NeoGPS as it seems to be more
-      // accurate than TinyGPSPlus
-      // https://github.com/SlashDevin/NeoGPS
-      //
-      // Another distance calculation may come from here, that avoids loads of
-      // trigonometry but need to verify the accuracy.
-      // https://www.instructables.com/Distance-measuring-and-more-device-using-Arduino-a/
-      //
-      if (gps.location.isValid() && gps.location.isUpdated()
-          && gps.date.isValid() && gps.time.isValid()) {
-        if (state.gpsLastLocation.lat == 0.0) {
-          // FIXME: This should probably only happen when we think we should UPDATE!
-          state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
-        } else {
-          // Should we update or not?
-          bool update = true;
-
-          // We need to have enough satelites, which is 4 for reasonable fix
-          if (update)
-            update = state.gpsPrecision >= (byte)4;
-
-          // If the location age is older than 1500ms we most likely don't have
-          // gps fix anymore and we need to wait for new fix.
-          if (update)
-            update = gps.location.age() < 1500UL;
-
-          // When speed is very low we risk having loads of error due to
-          // coordinates being too close together
-          if (update)
-            update = state.gpsSpeed > (word)5 && state.gpsSpeed < (word)300;
-
-          /*
-          if (update)
-            update = abs(gps.location.lat() - state.gpsLastLocation.lat) > 0.000001
-                     || abs(gps.location.lng() - state.gpsLastLocation.lng) > 0.000001;
-          */
-
-          double distance =
-            TinyGPSPlus::distanceBetween(gps.location.lat(),
-                                         gps.location.lng(),
-                                         state.gpsLastLocation.lat,
-                                         state.gpsLastLocation.lng);
-
-          // Don't update distance when the distance is not within reasonable
-          // difference. GPS has +- 2-3 meter possible error/noise...
-          if(update)
-            update = distance > 4.0 && distance < 200.0;
-
-          // If we think we should update distance, lets do it
-          if (update) {
-            state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
-            state.tripPartial += distance;
-            state.tripTotal += distance;
-          }
-          
-          // Log data to SD card
-          sdGPSLogWrite(state, gps, update, distance);
+        word speed = (word)round(gps.speed.kmph());
+        if (speed < (word)250) {
+          state.gpsSpeed = speed;
         }
       }
-    }
-  }
-}
-#endif
 
-#ifdef GPS_USE_NEOGPS
-void gpsUpdate(State& state, double minDistanceTreshold) {
-   while (gps.available(gpsPort)) {
-    gps_fix fix = gps.read();
+      if (gps.location.isValid() &&
+        gps.location.isUpdated() &&
+        gps.date.isValid() &&
+        gps.time.isValid()) {
 
-    if (fix.valid.satellites) {
-      state.gpsPrecision = fix.satellites;
-    }
-    if (fix.valid.speed) {
-      // Too slow, zero out the speed
-      if(fix.speed_mkn() < 1000) {
-        fix.spd.whole = 0;
-        fix.spd.frac  = 0;
-      }
-      state.gpsSpeed = round(fix.speed_kph());
-    }
-    if (fix.valid.heading) {
-      state.gpsHeading = fix.heading_cd();
-    }
-    if (fix.valid.location) {
-      if (state.gpsLastLocation.lat() == 0 && state.gpsLastLocation.lon() == 0) {
-        state.gpsLastLocation = fix.location;
-      } else {
-        float distanceKM = fix.location.DistanceKm(state.gpsLastLocation);
-        unsigned long distanceM = round(distanceKM * (float)1000.0);
-
-        // Should we update or not?
-        bool update = true;
+        // We need to have enough satelites, which is 4 for reasonable fix
+        if (state.gpsPrecision < (byte)4) continue;
 
         // If the location age is older than 1500ms we most likely don't have
         // gps fix anymore and we need to wait for new fix.
-        // if (update)
-        //   update = fix.location.age < (unsigned long)1500;
+        if (gps.location.age() > 1500UL) continue;
 
-        // When speed is very low we risk having loads of error due to
-        // coordinates being too close together
-        if (update)
-          update = state.gpsSpeed > (byte)5;
-
-        // Don't update distance when the distance is not within reasonable
-        // difference. GPS has +- 2-3 meter possible error/noise...
-        if(update)
-          update = distanceM > 5 && distanceM < 200;
-
-        // If we think we should update distance, lets do it
-        if (update) {
-          state.gpsLastLocation = fix.location;
-          state.tripLifetime += distanceM;
-          state.tripPartial += distanceM;
-          state.tripTotal += distanceM;
+        // Seems we have good fix, update 1st location if we need to and finish
+        if (state.gpsLocationsPosition == UINT8_MAX) {
+          state.gpsPreviousLocation = { gps.location.lat(), gps.location.lng() };
+          gpsAddLastLocation(state, { gps.location.lat(), gps.location.lng() });
+          continue;
         }
 
-        // Log data to SD card
-        sdGPSLogWrite(state, fix, update, distanceM);
+        // When speed is very low we risk having loads of error due to
+        // coordinates being too close together. High speed is catched above...
+        if (state.gpsSpeed <= (word)5) continue;
+
+        double distance = 0.0;
+        Coordinate latest = { gps.location.lat(), gps.location.lng() };
+        Coordinate previous = state.gpsPreviousLocation;
+
+        // Don't update distance when the distance is suspicious...
+        //distance = equirectangularDistance(previous.lat, previous.lng, latest.lat, latest.lng);
+        //if(distance > 50.0) continue;
+
+        // Add current fix to the location buffer for average calculation
+        gpsAddLastLocation(state, latest);
+
+        // Every 5 readings we calculate distance & update
+        // This translates to ~1s because we're updating GPS at 5Hz.
+        // We store average at this point to PREVIOUS location to calculate
+        // against it in next iteration.
+        if (state.gpsLocationsPosition == 4) {
+          Coordinate average = gpsAverageLastLocation(state);
+          distance = equirectangularDistance(previous.lat, previous.lng,
+                                             average.lat, average.lng); 
+
+          // We need to update distance counters & previous
+          state.tripPartial += distance;
+          state.tripTotal += distance;
+          state.gpsPreviousLocation = average;
+        }
+
+        sdGPSLogWrite(state, latest, previous, distance);
       }
     }
   }
 }
-#endif
+
+/**
+ * Simple Equirectangular aproximation gives very good results comparing to
+ * calculations on the PC where there are no rounding errors. This turns out to
+ * be closer to PC Harvesine or Equirectangular.
+ */
+double equirectangularDistance(double lat1, double long1, double lat2, double long2) {
+  double x = radians(long2 - long1) * cos((radians(lat1 + lat2)/2.0));
+  double y = radians(lat2 - lat1);
+  return sqrt(x*x + y*y) * 6371000.0;
+}
 
 //
 // Speed sensor
