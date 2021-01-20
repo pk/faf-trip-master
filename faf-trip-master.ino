@@ -142,8 +142,10 @@ struct Coordinate {
 enum Screen {
   SCREEN_TOTAL,
   SCREEN_PARTIAL,
+  //SCREEN_WPARTIAL,
   SCREEN_HEADING,
   SCREEN_SPEED,
+  //SCREEN_WSPEED,
   SCREEN_MENU
 };
 
@@ -202,25 +204,15 @@ void setup(void)  {
   #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
     Serial.begin(9600);
   #endif
-  #ifdef GPS_USE_HWSERIAL
-    lcd.print("SrP  H");
-  #else
-    lcd.print("SrP  S");
-  #endif
-  delay(UI_REFRESH_INTERVAL_2X);
 
   if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
     lcd.print("Sd  Er");
     while(true);
   }
-  lcd.print("Sd  On");
-  delay(UI_REFRESH_INTERVAL_2X);
 
   #ifdef USE_WHEEL_SENSOR
   pinMode(WHEEL_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), wheelRevsCounter, FALLING);
-  lcd.print("SPd On");
-  delay(UI_REFRESH_INTERVAL_2X);
   #endif
 
   #ifdef USE_COMPASS
@@ -228,16 +220,10 @@ void setup(void)  {
     lcd.print("CPS Er");
     while(true);
   }
-  lcd.print("CPS On");
-  delay(UI_REFRESH_INTERVAL_2X);
   #endif
 
   gpsSetup();
-  lcd.print("GPS On");
-  delay(UI_REFRESH_INTERVAL_2X);
 
-  lcd.print("-ridE-");
-  delay(UI_REFRESH_INTERVAL_3X);
 }
 
 void loop(void) {
