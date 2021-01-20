@@ -366,7 +366,11 @@ void screenUpdateBatteryIndicator(State& state) {
 bool sdPrepare(char *path) {
   File file = SD.open(path, O_RDWR | O_CREAT | O_TRUNC);
   if (!file) { return false; }
-  file.println("UPD,SAT,LAT,LON,DIST,CAP,SPD,LATERR,LONERR");
+  file.print("UPD,SAT,LAT,LNG,GDST,TGDST,GSPD,GCAP");
+  #ifdef USE_WHEEL_SENSOR
+  file.print(",TWDST,WSPD");
+  #endif
+  file.println("");
   file.close();
   return true;
 }
