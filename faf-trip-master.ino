@@ -418,10 +418,6 @@ bool sdGPSLogWrite(char *path, State& state, Coordinate& latest, Coordinate& pre
   file.print(previous.lng, 6); file.print(separator);
   file.println("");
   file.close();
-
-  #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
-  Serial.println(line);
-  #endif
 }
 
 //
