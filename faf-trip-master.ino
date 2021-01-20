@@ -51,7 +51,10 @@
  *   Final board: STM32 ARM for 32-bit precission
  *   https://www.laskarduino.cz/bluepill-arm-stm32-stm32f103c8-vyvojova-deska/
  */
+
+// Configuration
 //#define DEBUG
+#define GPS_USE_HWSERIAL
 //#define USE_WHEEL_SENSOR
 //#define USE_COMPASS
 
@@ -104,7 +107,6 @@ const char UBLOX_INIT[] PROGMEM = {
   // Bauld
   0xB5,0x62,0x06,0x00,0x14,0x00,0x01,0x00,0x00,0x00,0xD0,0x08,0x00,0x00,0x00,0xC2,0x01,0x00,0x07,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0xC0,0x7E // 115200 bauld
 };
-#define GPS_USE_HWSERIAL
 #ifdef GPS_USE_HWSERIAL
   #define gpsPort Serial
 #else
