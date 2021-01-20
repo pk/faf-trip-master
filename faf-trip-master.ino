@@ -211,9 +211,13 @@ void setup(void)  {
     Serial.begin(9600);
   #endif
 
+  if (!SD.begin(SD_CS_PIN)) {
+    lcd.print("Sd  E1");
+    while(true);
+  }
   sdGPSLogFile(sdGPSLogPath, sizeof(sdGPSLogPath));
-  if (!SD.begin(SD_CS_PIN) || !sdPrepare(sdGPSLogPath)) {
-    lcd.print("Sd  Er");
+  if (!sdPrepare(sdGPSLogPath)) {
+    lcd.print("Sd  E2");
     while(true);
   }
 
@@ -380,7 +384,6 @@ void sdGPSLogFile(char *buffer, int size) {
   snprintf(buffer, size, "%d-gps.txt", i);
   while(SD.exists(buffer)) {
     snprintf(buffer, size, "%d-gps.txt", i++);
-    Serial.println(buffer);
   }
 }
 
