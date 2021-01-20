@@ -140,11 +140,11 @@ struct State {
   #endif
 
   #ifdef USE_WHEEL_SENSOR
-           word wheelCircumference = 2045;
-           word wheelSpeed = 0;
-  unsigned long wheelPartial = 0;
-  unsigned long wheelPreviousTotal = 0;
-  unsigned long wheelTotal = 0;
+           double wheelCircumference = 2.165186;
+             word wheelSpeed = 0;
+           double wheelPartial = 0;
+           double wheelPreviousTotal = 0;
+           double wheelTotal = 0;
   unsigned long wheelPreviousMillisSpeed = 0;
   #endif
 
@@ -580,8 +580,8 @@ void wheelRevsCounter() {
 void wheelSensorUpdate() {
   byte revsTmp = wheelRevs;
   if(revsTmp > 0) {
-    state.wheelPartial += ((state.wheelCircumference / 1000.0) * revsTmp) + 0.5;
-    state.wheelTotal += ((state.wheelCircumference  / 1000.0) * revsTmp) + 0.5;
+    state.wheelPartial += (state.wheelCircumference * (double)revsTmp);
+    state.wheelTotal += (state.wheelCircumference * (double)revsTmp);
     wheelRevs -= revsTmp;  
   }
 }
