@@ -342,26 +342,19 @@ void onButtonHeld(Button& btn, uint16_t duration, uint8_t repeat_count) {
 /**
  * Display GPS "accuracy" information in Battery level
  * 
- * This method should be run at UI_REFRESH_INTERVAL frequency.
- * It blinks battery indicator if there is no GPS and it shows certain number
- * of bars based on the GPS Satelites at the moment.
+ * When there are vere fiew satelites it shows no bars otherwise certain
+ * number of bars based on the GPS Satelites at the moment.
  */
 void screenUpdateBatteryIndicator(State& state) {
   byte level = 0;
-  if (state.gpsPrecision == UINT8_MAX) {
-    state.gpsPrecision = 0;
+  if (state.gpsPrecision <= 1) {
     level = 0;
-  } else if (state.gpsPrecision == 0) {
-    state.gpsPrecision = UINT8_MAX;
-    level = 3;
+  } else if (state.gpsPrecision >= 2 && state.gpsPrecision < 4) {
+    level = 1;
+  } else if (state.gpsPrecision >= 4 && state.gpsPrecision < 6) {
+    level = 2;
   } else {
-    if (state.gpsPrecision < 4) {
-      level = 1;
-    } else if (state.gpsPrecision >= 4 && state.gpsPrecision <= 6) {
-      level = 2;
-    } else {
-      level = 3;
-    }
+    level = 3;
   }
   lcd.setBatteryLevel(level);
 }
