@@ -51,9 +51,9 @@
  *   Final board: STM32 ARM for 32-bit precission
  *   https://www.laskarduino.cz/bluepill-arm-stm32-stm32f103c8-vyvojova-deska/
  */
-#define DEBUG
-// #define USE_WHEEL_SENSOR
-// #define USE_COMPASS
+//#define DEBUG
+//#define USE_WHEEL_SENSOR
+//#define USE_COMPASS
 
 // Buttons
 #include <Button.h>
