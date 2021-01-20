@@ -288,12 +288,9 @@ void screenUpdate(State& state) {
   case SCREEN_SPEED:
     #ifdef USE_WHEEL_SENSOR
     lcd.print((long)state.wheelSpeed);
-    #else
-    lcd.print((long)state.gpsSpeed);
-    #endif
-    break;
+  #endif
   case SCREEN_MENU:
-    lcd.print("MENU");
+    lcd.print("Menu");
     break;
   }
 }
