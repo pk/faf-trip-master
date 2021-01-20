@@ -305,7 +305,7 @@ void onButtonReleased(Button& btn, uint16_t duration) {
   if (btn.is(buttonDown) && !buttonUp.isPressed()) { return; }
   if (duration > BUTTON_HOLD_DELAY - 100) { return; }
 
-  state.activeScreen == SCREEN_MENU
+  state.activeScreen == SCREEN_SPEED
     ? state.activeScreen = SCREEN_TOTAL
     : state.activeScreen += 1;
 }
