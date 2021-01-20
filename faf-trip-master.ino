@@ -121,9 +121,9 @@ TinyGPSPlus gps;
 
 // SDCard
 #define SD_CS_PIN SS
-#define SD_GPS_FILE "gps.txt"
 #include <SdFat.h>
 SdFat SD;
+char sdGPSLogPath[15];
 
 // UI
 #define UI_REFRESH_INTERVAL    500
@@ -215,7 +215,8 @@ void setup(void)  {
   #endif
   delay(UI_REFRESH_INTERVAL_2X);
 
-  if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
+  sdGPSLogFile(sdGPSLogPath, sizeof(sdGPSLogPath));
+  if (!SD.begin(SD_CS_PIN) || !sdPrepare(sdGPSLogPath)) {
     lcd.print("Sd  Er");
     while(true);
   }
@@ -388,6 +389,15 @@ void screenUpdateBatteryIndicator(State& state) {
 // SD Card
 //
 
+void sdGPSLogFile(char *buffer, int size) {
+  int i = 0;
+  snprintf(buffer, size, "%d-gps.txt", i);
+  while(SD.exists(buffer)) {
+    snprintf(buffer, size, "%d-gps.txt", i++);
+    Serial.println(buffer);
+  }
+}
+
 bool sdPrepare(char *path) {
   File file = SD.open(path, O_RDWR | O_CREAT | O_TRUNC);
   if (!file) { return false; }
@@ -400,8 +410,8 @@ bool sdPrepare(char *path) {
   return true;
 }
 
-bool sdGPSLogWrite(State& state, Coordinate& latest, Coordinate& previous, double distance) {
-  File file = SD.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND);
+bool sdGPSLogWrite(char *path, State& state, Coordinate& latest, Coordinate& previous, double distance) {
+  File file = SD.open(path, O_WRONLY | O_AT_END | O_APPEND);
   if (!file) { return false; }
 
   char separator = ',';
@@ -543,7 +553,7 @@ void gpsUpdate(State& state) {
           state.gpsPreviousLocation = average;
         }
 
-        sdGPSLogWrite(state, latest, previous, distance);
+        sdGPSLogWrite(sdGPSLogPath, state, latest, previous, distance);
       }
     }
   }
