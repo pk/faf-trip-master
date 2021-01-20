@@ -10,6 +10,8 @@
  *     - http://www.gammon.com.au/progmem
  * 
  *   - Menu needs to be implemented
+ *     - When we start we will show Menu for 2 seconds
+ *     - If user use buttons we enter menu, otherwise continue
  * 
  *   - Add dhop handling
  *     - (https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps)
