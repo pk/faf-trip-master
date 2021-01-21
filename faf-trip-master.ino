@@ -462,8 +462,7 @@ void gpsUpdate(State& state) {
         }
       }
 
-      if (gps.location.isValid() && gps.location.isUpdated()
-          && gps.date.isValid() && gps.time.isValid()) {
+      if (gps.location.isValid() && gps.location.isUpdated()) {
         if (state.gpsLastLocation.lat == 0.0) {
           // FIXME: This should probably only happen when we think we should UPDATE!
           state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
