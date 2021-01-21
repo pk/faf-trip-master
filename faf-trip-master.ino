@@ -103,8 +103,8 @@ const char UBLOX_INIT[] PROGMEM = {
 
   // Rate
   //0xB5,0x62,0x06,0x08,0x06,0x00,0x64,0x00,0x01,0x00,0x01,0x00,0x7A,0x12, //(10Hz)
-  0xB5,0x62,0x06,0x08,0x06,0x00,0xC8,0x00,0x01,0x00,0x01,0x00,0xDE,0x6A, //(5Hz)
-  //0xB5,0x62,0x06,0x08,0x06,0x00,0xE8,0x03,0x01,0x00,0x01,0x00,0x01,0x39, //(1Hz)
+  //0xB5,0x62,0x06,0x08,0x06,0x00,0xC8,0x00,0x01,0x00,0x01,0x00,0xDE,0x6A, //(5Hz)
+  0xB5,0x62,0x06,0x08,0x06,0x00,0xE8,0x03,0x01,0x00,0x01,0x00,0x01,0x39, //(1Hz)
 
   // Bauld
   0xB5,0x62,0x06,0x00,0x14,0x00,0x01,0x00,0x00,0x00,0xD0,0x08,0x00,0x00,0x00,0xC2,0x01,0x00,0x07,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0xC0,0x7E // 115200 bauld
@@ -117,7 +117,6 @@ const char UBLOX_INIT[] PROGMEM = {
   //                     TX - on Arduino RX on GPS
   NeoSWSerial gpsPort(5, 4);
 #endif
-
 #include <TinyGPS++.h>
 TinyGPSPlus gps;
 
@@ -134,9 +133,8 @@ SdFat SD;
 #define MAX_TRIP_VALUE 99999.0
 #define MIN_TRIP_VALUE 0.0
 unsigned long uiMillis = 0;
-unsigned long sdCardMillis = 0;
 
-struct Coordinate {
+typedef struct Coordinate {
   double lat;
   double lng;
 };
@@ -144,15 +142,14 @@ struct Coordinate {
 enum Screen {
   SCREEN_TOTAL,
   SCREEN_PARTIAL,
-  //SCREEN_WPARTIAL,
   SCREEN_HEADING,
   SCREEN_SPEED,
-  //SCREEN_WSPEED,
-  SCREEN_MENU
+  SCREEN_MENU,
 };
 
 struct State {
   byte activeScreen = SCREEN_TOTAL;
+
   // How many decimal points we want to display
   // (this influences increment 10 or 100 m when adjusting distance)
   byte decimals = 2;
@@ -171,11 +168,13 @@ struct State {
   unsigned long wheelPreviousMillisSpeed = 0;
   #endif
 
-  bool useGPS = true;
   Coordinate gpsLastLocation = {};
+
   byte gpsPrecision = 0;
+
   // CAP heading in DEG 0-360
   word gpsHeading = 0;
+
   // Our current speed
   word gpsSpeed = 0;
 
@@ -204,11 +203,11 @@ void setup(void)  {
   lcd.setBatteryLevel(0);
 
   #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
-    Serial.begin(9600);
+    Serial.begin(115200);
   #endif
 
   if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
-    lcd.print("Sd  Er");
+    lcd.print("Sd  E1");
     while(true);
   }
 
@@ -225,7 +224,6 @@ void setup(void)  {
   #endif
 
   gpsSetup();
-
 }
 
 void loop(void) {
@@ -241,7 +239,7 @@ void loop(void) {
   state.compassHeading = calculateCompassHeading(compass, state.compassDeclinationAngle);
   #endif
 
-  gpsUpdate(state, 4.0);
+  gpsUpdate(state);
   if (millis() > 10000 && gps.charsProcessed() < 10) {
     lcd.print("GPS E1");
     while(true);
@@ -282,20 +280,15 @@ void screenUpdate(State& state) {
     lcd.print(state.tripTotal / 1000.0, 1);
     break;
   case SCREEN_PARTIAL:
-    #ifdef USE_WHEEL_SENSOR
-    lcd.print(state.wheelPartial / 1000.0, state.decimals);
-    #else
     lcd.print(state.tripPartial / 1000.0, state.decimals);
-    #endif
     break;
   case SCREEN_HEADING:
     snprintf(lcdStr, sizeof(lcdStr), "%u*", state.gpsHeading);
     lcd.print(lcdStr, true);
     break;
   case SCREEN_SPEED:
-    #ifdef USE_WHEEL_SENSOR
-    lcd.print((long)state.wheelSpeed);
-  #endif
+    lcd.print((long)state.gpsSpeed);
+    break;
   case SCREEN_MENU:
     lcd.print("Menu");
     break;
@@ -438,33 +431,37 @@ void gpsSetup() {
   gpsPort.end();
   gpsPort.begin(115200); 
 }
+
+/**
+ * Simple Equirectangular aproximation gives very good results comparing to
+ * calculations on the PC where there are no rounding errors. This turns out to
+ * be closer to PC Harvesine or Equirectangular.
+ */
+double equirectangularDistance(double lat1, double long1, double lat2, double long2) {
+  double x = radians(long2 - long1) * cos((radians(lat1 + lat2)/2.0));
+  double y = radians(lat2 - lat1);
+  double z = sqrt(sq(x) + sq(y));
+  return z * 6371000.0;
+}
+
+void gpsUpdate(State& state) {
   while (gpsPort.available() > 0) {
     if (gps.encode(gpsPort.read())) {
       if (gps.satellites.isValid() && gps.satellites.isUpdated()) {
         state.gpsPrecision = (byte)gps.satellites.value();
       }
+
       if (gps.course.isValid() && gps.course.isUpdated()) {
         state.gpsHeading = (word)round(gps.course.deg());
       }
+
       if (gps.speed.isValid() && gps.speed.isUpdated()) {
-        state.gpsSpeed = (word)round(gps.speed.kmph());
+        word speed = (word)round(gps.speed.kmph());
+        if (speed < (word)250) {
+          state.gpsSpeed = speed;
+        }
       }
 
-      // This needs to be verified for accuracy, so far I'm getting about 5%
-      // under reading comparing to the 2 different apps on the iPhone.
-      // I think some more filering or cleverness is in order.
-      //
-      // Also as Arduino is only 8-bit arithmetic... we may have error at low
-      // speed, but that would not explain the under reading.
-      //
-      // Possibility would be to switch to NeoGPS as it seems to be more
-      // accurate than TinyGPSPlus
-      // https://github.com/SlashDevin/NeoGPS
-      //
-      // Another distance calculation may come from here, that avoids loads of
-      // trigonometry but need to verify the accuracy.
-      // https://www.instructables.com/Distance-measuring-and-more-device-using-Arduino-a/
-      //
       if (gps.location.isValid() && gps.location.isUpdated()
           && gps.date.isValid() && gps.time.isValid()) {
         if (state.gpsLastLocation.lat == 0.0) {
@@ -488,17 +485,15 @@ void gpsSetup() {
           if (update)
             update = state.gpsSpeed > (word)5 && state.gpsSpeed < (word)300;
 
-          /*
-          if (update)
-            update = abs(gps.location.lat() - state.gpsLastLocation.lat) > 0.000001
-                     || abs(gps.location.lng() - state.gpsLastLocation.lng) > 0.000001;
-          */
-
-          double distance =
-            TinyGPSPlus::distanceBetween(gps.location.lat(),
-                                         gps.location.lng(),
-                                         state.gpsLastLocation.lat,
-                                         state.gpsLastLocation.lng);
+          double distance = 0.0;
+          distance = TinyGPSPlus::distanceBetween(gps.location.lat(),
+                                                  gps.location.lng(),
+                                                  state.gpsLastLocation.lat,
+                                                  state.gpsLastLocation.lng);
+          distance = equirectangularDistance(gps.location.lat(),
+                                             gps.location.lng(),
+                                             state.gpsLastLocation.lat,
+                                             state.gpsLastLocation.lng);
 
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
@@ -519,67 +514,6 @@ void gpsSetup() {
     }
   }
 }
-#endif
-
-#ifdef GPS_USE_NEOGPS
-void gpsUpdate(State& state, double minDistanceTreshold) {
-   while (gps.available(gpsPort)) {
-    gps_fix fix = gps.read();
-
-    if (fix.valid.satellites) {
-      state.gpsPrecision = fix.satellites;
-    }
-    if (fix.valid.speed) {
-      // Too slow, zero out the speed
-      if(fix.speed_mkn() < 1000) {
-        fix.spd.whole = 0;
-        fix.spd.frac  = 0;
-      }
-      state.gpsSpeed = round(fix.speed_kph());
-    }
-    if (fix.valid.heading) {
-      state.gpsHeading = fix.heading_cd();
-    }
-    if (fix.valid.location) {
-      if (state.gpsLastLocation.lat() == 0 && state.gpsLastLocation.lon() == 0) {
-        state.gpsLastLocation = fix.location;
-      } else {
-        float distanceKM = fix.location.DistanceKm(state.gpsLastLocation);
-        unsigned long distanceM = round(distanceKM * (float)1000.0);
-
-        // Should we update or not?
-        bool update = true;
-
-        // If the location age is older than 1500ms we most likely don't have
-        // gps fix anymore and we need to wait for new fix.
-        // if (update)
-        //   update = fix.location.age < (unsigned long)1500;
-
-        // When speed is very low we risk having loads of error due to
-        // coordinates being too close together
-        if (update)
-          update = state.gpsSpeed > (byte)5;
-
-        // Don't update distance when the distance is not within reasonable
-        // difference. GPS has +- 2-3 meter possible error/noise...
-        if(update)
-          update = distanceM > 5 && distanceM < 200;
-
-        // If we think we should update distance, lets do it
-        if (update) {
-          state.gpsLastLocation = fix.location;
-          state.tripLifetime += distanceM;
-          state.tripPartial += distanceM;
-          state.tripTotal += distanceM;
-        }
-
-        // Log data to SD card
-        sdGPSLogWrite(state, fix, update, distanceM);
-      }
-    }
-  }
-}
-#endif
 
 //
 // Speed sensor
