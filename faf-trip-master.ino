@@ -489,10 +489,10 @@ void gpsUpdate(State& state) {
                                                   gps.location.lng(),
                                                   state.gpsLastLocation.lat,
                                                   state.gpsLastLocation.lng);
-          distance = equirectangularDistance(gps.location.lat(),
-                                             gps.location.lng(),
-                                             state.gpsLastLocation.lat,
-                                             state.gpsLastLocation.lng);
+          //distance = equirectangularDistance(gps.location.lat(),
+          //                                   gps.location.lng(),
+          //                                   state.gpsLastLocation.lat,
+          //                                   state.gpsLastLocation.lng);
 
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
