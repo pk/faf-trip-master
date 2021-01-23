@@ -55,26 +55,26 @@
  */
 
 // Configuration
-//#define DEBUG
-#define GPS_USE_HWSERIAL
+#define DEBUG
 //#define USE_WHEEL_SENSOR
 //#define USE_COMPASS
 
 // Buttons
 #include <Button.h>
+#include <Bounce2.h>
 #include <ButtonEventCallback.h>
 #include <PushButton.h>
-#include <Bounce2.h>
 #define BUTTON_HOLD_DELAY 800
 #define BUTTON_HOLD_REPEAT 30
-PushButton buttonUp = PushButton(A0, ENABLE_INTERNAL_PULLUP);
-PushButton buttonDown = PushButton(A1, ENABLE_INTERNAL_PULLUP);
+PushButton buttonUp = PushButton(0, ENABLE_INTERNAL_PULLUP);
+PushButton buttonDown = PushButton(1, ENABLE_INTERNAL_PULLUP);
 
 // LCD display
 #include <HT1621.h>
-#define LCD_CS_PIN 6
-#define LCD_WR_PIN 7
-#define LCD_DATA_PIN 8
+#define LCD_CS_PIN 14
+#define LCD_WR_PIN 15
+#define LCD_DATA_PIN 16
+#define LCD_LED_PIN 9
 HT1621 lcd;
 
 // Compass sensor
@@ -106,23 +106,16 @@ const char UBLOX_INIT[] PROGMEM = {
   //0xB5,0x62,0x06,0x08,0x06,0x00,0xC8,0x00,0x01,0x00,0x01,0x00,0xDE,0x6A, //(5Hz)
   0xB5,0x62,0x06,0x08,0x06,0x00,0xE8,0x03,0x01,0x00,0x01,0x00,0x01,0x39, //(1Hz)
 
-  // Bauld
-  0xB5,0x62,0x06,0x00,0x14,0x00,0x01,0x00,0x00,0x00,0xD0,0x08,0x00,0x00,0x00,0xC2,0x01,0x00,0x07,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0xC0,0x7E // 115200 bauld
+  // Baud rate
+  0xB5,0x62,0x06,0x00,0x14,0x00,0x01,0x00,0x00,0x00,0xD0,0x08,0x00,0x00,0x00,0xC2,0x01,0x00,0x07,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0xC0,0x7E // 115200
 };
-#ifdef GPS_USE_HWSERIAL
-  #define gpsPort Serial
-#else
-  #include <NeoSWSerial.h>
-  //                  RX - on Arduino TX on GPS
-  //                     TX - on Arduino RX on GPS
-  NeoSWSerial gpsPort(5, 4);
-#endif
+#define gpsPort Serial3
 #include <TinyGPS++.h>
 TinyGPSPlus gps;
 
 // SDCard
-#define SD_CS_PIN SS
-#define SD_GPS_FILE "gps.txt"
+#define SD_CS_PIN 10
+#define SD_GPS_FILE (char*)"gps.txt"
 #include <SdFat.h>
 SdFat SD;
 
@@ -134,7 +127,7 @@ SdFat SD;
 #define MIN_TRIP_VALUE 0.0
 unsigned long uiMillis = 0;
 
-typedef struct Coordinate {
+struct Coordinate {
   double lat;
   double lng;
 };
@@ -190,6 +183,10 @@ struct State {
 //
 
 void setup(void)  {
+  #ifdef DEBUG
+  Serial.begin(115200);
+  #endif
+
   buttonUp.onPress(onButtonPressed);
   buttonUp.onRelease(150, onButtonReleased);
   buttonUp.onHoldRepeat(BUTTON_HOLD_DELAY, BUTTON_HOLD_REPEAT, onButtonHeld);
@@ -198,16 +195,15 @@ void setup(void)  {
   buttonDown.onRelease(150, onButtonReleased);
   buttonDown.onHoldRepeat(BUTTON_HOLD_DELAY, BUTTON_HOLD_REPEAT, onButtonHeld);
 
-  lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN);
+  lcd.begin(LCD_CS_PIN, LCD_WR_PIN, LCD_DATA_PIN, LCD_LED_PIN);
   lcd.clear();
   lcd.setBatteryLevel(0);
-
-  #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
-    Serial.begin(115200);
-  #endif
-
+  //lcd.backlight();
+  // This controlls PWM for adjustable backlight
+  analogWrite(LCD_LED_PIN, 256);
+  
   if (!SD.begin(SD_CS_PIN) || !sdPrepare(SD_GPS_FILE)) {
-    lcd.print("Sd  E1");
+    lcd.print((char*)"Sd  E1");
     while(true);
   }
 
@@ -218,7 +214,7 @@ void setup(void)  {
 
   #ifdef USE_COMPASS
   if (!compass.begin()) {
-    lcd.print("CPS Er");
+    lcd.print((char*)"CPS Er");
     while(true);
   }
   #endif
@@ -241,7 +237,7 @@ void loop(void) {
 
   gpsUpdate(state);
   if (millis() > 10000 && gps.charsProcessed() < 10) {
-    lcd.print("GPS E1");
+    lcd.print((char*)"GPS E1");
     while(true);
   }
 
@@ -287,10 +283,10 @@ void screenUpdate(State& state) {
     lcd.print(lcdStr, true);
     break;
   case SCREEN_SPEED:
-    lcd.print((long)state.gpsSpeed);
+    lcd.print((long)state.gpsSpeed, (char*)"%6li", 0);
     break;
   case SCREEN_MENU:
-    lcd.print("Menu");
+    lcd.print((char*)"Menu");
     break;
   }
 }
@@ -364,9 +360,14 @@ void screenUpdateBatteryIndicator(State& state) {
 //
 
 bool sdPrepare(char *path) {
-  File file = SD.open(path, O_RDWR | O_CREAT | O_TRUNC);
-  if (!file) { return false; }
-  file.print("UPD,SAT,LAT,LNG,GDST,TGDST,GSPD,GCAP");
+  SdFile file;
+  if(!file.open(path, O_RDWR | O_CREAT | O_TRUNC)) {
+    #ifdef DEBUG
+    Serial.print("SD: Unable to prepare '"); Serial.print(path); Serial.println("' file!");
+    #endif
+    return false;
+  }
+  file.print("SAT,LAT,LNG,GDSTHW,GDSTAPX,GDSTTOT,GCAP,GSPD");
   #ifdef USE_WHEEL_SENSOR
   file.print(",TWDST,WSPD");
   #endif
@@ -375,9 +376,18 @@ bool sdPrepare(char *path) {
   return true;
 }
 
-bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, double distance) {
-  File file = SD.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND);
-  if (!file) { return false; }
+bool sdGPSLogWrite(State& state,
+                   TinyGPSPlus& fix,
+                   double dHarvesine,
+                   double dAprox,
+                   double dTotal) {
+  SdFile file;
+  if(!file.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND)) {
+    #ifdef DEBUG
+    Serial.println("SD: Unable to write to GPS Log!'");
+    #endif
+    return false;
+  }
 
   char latString[10];
   dtostrf(fix.location.lat(), 9, 6, latString);
@@ -385,32 +395,32 @@ bool sdGPSLogWrite(State& state, TinyGPSPlus& fix, bool update, double distance)
   char lngString[10];
   dtostrf(fix.location.lng(), 9, 6, lngString);
 
-  char dstString[9];
-  dtostrf(distance, 8, 4, dstString);
+  char dHarvesineStr[7];
+  dtostrf(dHarvesine, 7, 2, dHarvesineStr);
 
-  char line[31] = {0};
+  char dAproxStr[7];
+  dtostrf(dAprox, 6, 2, dAproxStr);
+
+  char line[61];
   snprintf(line,
            sizeof(line),
-           "%s,%u,%s,%s,%s",
-           update ? "Y" : "N",
+           "%u,%s,%s,%s,%s,%u,%u,%u",
            (uint8_t)state.gpsPrecision,
            latString,
            lngString,
-           dstString);
-  file.print(line);
-  snprintf(line,
-           sizeof(line),
-           ",%u,%u,%u,%u",
+           dHarvesineStr,
+           dAproxStr,
+           (unsigned int)(dTotal + 0.5),
            (uint8_t)state.gpsHeading,
-           (uint8_t)state.gpsSpeed,
-           (uint8_t)42,
-           (uint8_t)42);
+           (uint8_t)state.gpsSpeed);
   file.println(line);
   file.close();
 
-  #if defined(DEBUG) && !defined(GPS_USE_HWSERIAL)
+  #if defined(DEBUG)
   Serial.println(line);
   #endif
+
+  return true;
 }
 
 //
@@ -421,7 +431,7 @@ void gpsSetup() {
   gpsPort.begin(9600);
 
   // Send configuration data in UBX protocol
-  for(int i = 0; i < sizeof(UBLOX_INIT); i++) {
+  for(unsigned long i = 0; i < sizeof(UBLOX_INIT); i++) {
     gpsPort.write(pgm_read_byte(UBLOX_INIT + i));
     // Simulating a 38400baud pace (or less),
     // otherwise commands are not accepted by the device.
@@ -464,8 +474,8 @@ void gpsUpdate(State& state) {
 
       if (gps.location.isValid() && gps.location.isUpdated()) {
         if (state.gpsLastLocation.lat == 0.0) {
-          // FIXME: This should probably only happen when we think we should UPDATE!
-          state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
+          state.gpsLastLocation.lat = gps.location.lat();
+          state.gpsLastLocation.lng = gps.location.lng();
         } else {
           // Should we update or not?
           bool update = true;
@@ -484,30 +494,31 @@ void gpsUpdate(State& state) {
           if (update)
             update = state.gpsSpeed > (word)5 && state.gpsSpeed < (word)300;
 
-          double distance = 0.0;
-          distance = TinyGPSPlus::distanceBetween(gps.location.lat(),
+          double dHarvesine = TinyGPSPlus::distanceBetween(gps.location.lat(),
+                                                           gps.location.lng(),
+                                                           state.gpsLastLocation.lat,
+                                                           state.gpsLastLocation.lng);
+          double dAprox = equirectangularDistance(gps.location.lat(),
                                                   gps.location.lng(),
                                                   state.gpsLastLocation.lat,
                                                   state.gpsLastLocation.lng);
-          //distance = equirectangularDistance(gps.location.lat(),
-          //                                   gps.location.lng(),
-          //                                   state.gpsLastLocation.lat,
-          //                                   state.gpsLastLocation.lng);
 
+          double distance = dHarvesine;
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
           if(update)
-            update = distance > 4.0 && distance < 200.0;
+            update = distance < 200.0;
 
           // If we think we should update distance, lets do it
           if (update) {
-            state.gpsLastLocation = { gps.location.lat(), gps.location.lng() };
+            state.gpsLastLocation.lat = gps.location.lat();
+            state.gpsLastLocation.lng = gps.location.lng();
             state.tripPartial += distance;
             state.tripTotal += distance;
           }
           
           // Log data to SD card
-          sdGPSLogWrite(state, gps, update, distance);
+          sdGPSLogWrite(state, gps, dHarvesine, dAprox, state.tripTotal);
         }
       }
     }
