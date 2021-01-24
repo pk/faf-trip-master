@@ -515,14 +515,13 @@ void gpsUpdate(State& state) {
             state.gpsLastLocation.lng = gps.location.lng();
             state.tripPartial += distance;
             state.tripTotal += distance;
-          }
-          
           // Log data to SD card
           sdGPSLogWrite(state, gps, dHarvesine, dAprox, state.tripTotal);
         }
       }
     }
   }
+}
 }
 
 //
