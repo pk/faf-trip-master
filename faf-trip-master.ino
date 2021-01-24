@@ -71,10 +71,10 @@ PushButton buttonDown = PushButton(8, ENABLE_INTERNAL_PULLUP);
 
 // LCD display
 #include <HT1621.h>
-#define LCD_CS_PIN 14
-#define LCD_WR_PIN 15
+#define LCD_CS_PIN   14
+#define LCD_WR_PIN   15
 #define LCD_DATA_PIN 16
-#define LCD_LED_PIN 9
+#define LCD_LED_PIN  9
 HT1621 lcd;
 
 // Compass sensor
@@ -163,12 +163,12 @@ struct State {
   #endif
 
   #ifdef USE_WHEEL_SENSOR
-           double wheelCircumference = 2.165186;
              word wheelSpeed = 0;
-           double wheelPartial = 0;
-           double wheelPreviousTotal = 0;
-           double wheelTotal = 0;
-  unsigned long wheelPreviousMillisSpeed = 0;
+           double wheelCircumference = 2.165186;
+           double wheelPartial = 0.0;
+           double wheelPreviousTotal = 0.0;
+           double wheelTotal = 0.0;
+  unsigned   long wheelPreviousMillisSpeed = 0;
   #endif
 
   Coordinate gpsLastLocation = {};
@@ -178,14 +178,14 @@ struct State {
   // CAP heading in DEG 0-360
   word gpsHeading = 0;
 
-  // Our current speed
+  // Our current speed km/h
   word gpsSpeed = 0;
 
-  // Total distance (eg day/stage)
-  double tripTotal = 0;
+  // Total distance (eg day/stage) in metres
+  double tripTotal = 0.0;
 
-  // Partial distance (point - to point)
-  double tripPartial = 0;
+  // Partial distance (point - to point) in metres
+  double tripPartial = 0.0;
 } state;
 
 //
@@ -525,13 +525,13 @@ void gpsUpdate(State& state) {
             state.gpsLastLocation.lng = gps.location.lng();
             state.tripPartial += distance;
             state.tripTotal += distance;
-          // Log data to SD card
-          sdGPSLogWrite(state, gps, dHarvesine, dAprox, state.tripTotal);
+            // Log data to SD card
+            sdGPSLogWrite(state, gps, dHarvesine, dAprox, state.tripTotal);
+          }
         }
       }
     }
   }
-}
 }
 
 //
