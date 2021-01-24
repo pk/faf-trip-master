@@ -66,8 +66,8 @@
 #include <PushButton.h>
 #define BUTTON_HOLD_DELAY 800
 #define BUTTON_HOLD_REPEAT 30
-PushButton buttonUp = PushButton(0, ENABLE_INTERNAL_PULLUP);
-PushButton buttonDown = PushButton(1, ENABLE_INTERNAL_PULLUP);
+PushButton buttonUp = PushButton(7, ENABLE_INTERNAL_PULLUP);
+PushButton buttonDown = PushButton(8, ENABLE_INTERNAL_PULLUP);
 
 // LCD display
 #include <HT1621.h>
@@ -109,7 +109,7 @@ const char UBLOX_INIT[] PROGMEM = {
   // Baud rate
   0xB5,0x62,0x06,0x00,0x14,0x00,0x01,0x00,0x00,0x00,0xD0,0x08,0x00,0x00,0x00,0xC2,0x01,0x00,0x07,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0xC0,0x7E // 115200
 };
-#define gpsPort Serial3
+#define gpsPort Serial1
 #include <TinyGPS++.h>
 TinyGPSPlus gps;
 
