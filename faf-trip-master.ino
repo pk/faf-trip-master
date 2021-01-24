@@ -396,10 +396,10 @@ bool sdGPSLogWrite(State& state,
   dtostrf(fix.location.lng(), 9, 6, lngString);
 
   char dHarvesineStr[7];
-  dtostrf(dHarvesine, 7, 2, dHarvesineStr);
+  dtostrf(dHarvesine, 6, 3, dHarvesineStr);
 
   char dAproxStr[7];
-  dtostrf(dAprox, 6, 2, dAproxStr);
+  dtostrf(dAprox, 6, 3, dAproxStr);
 
   char line[61];
   snprintf(line,
