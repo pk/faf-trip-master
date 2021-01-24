@@ -56,7 +56,7 @@
 
 // Configuration
 #define DEBUG
-//#define USE_WHEEL_SENSOR
+#define USE_WHEEL_SENSOR
 //#define USE_COMPASS
 
 // Buttons
