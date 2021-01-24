@@ -115,6 +115,11 @@ const char UBLOX_INIT[] PROGMEM = {
 #define gpsPort Serial1
 #include <TinyGPS++.h>
 TinyGPSPlus gps;
+/*
+TinyGPSCustom pdop(gps, "GPGSA", 15); // $GPGSA sentence, 15th element
+TinyGPSCustom hdop(gps, "GPGSA", 16); // $GPGSA sentence, 16th element
+TinyGPSCustom vdop(gps, "GPGSA", 17); // $GPGSA sentence, 17th element
+*/
 
 // SDCard
 #define SD_CS_PIN 10
@@ -173,6 +178,9 @@ struct State {
 
   // Our current speed km/h
   word gpsSpeed = 0;
+
+  // DOPs
+  double gpsHdop = 0.0;
 
   // Total distance (eg day/stage) in metres
   double tripTotal = 0.0;
@@ -494,52 +502,46 @@ void gpsUpdate(State& state) {
       }
 
       if (gps.location.isValid() && gps.location.isUpdated()) {
+        // We need to have enough satelites, which is 4 for reasonable fix
+        if (state.gpsPrecision < (byte)4) continue;
+
+        // If the location age is older than 1500ms we most likely don't have
+        // gps fix anymore and we need to wait for new fix.
+        if (gps.location.age() > 1500UL) continue;
+
+        // When speed is very low we risk having loads of error due to
+        // coordinates being too close together
+        if (state.gpsSpeed <= (word)5 || state.gpsSpeed >= (word)300) continue;
+
+        // If this is 1st good fix store it for next calculation
         if (state.gpsLastLocation.lat == 0.0) {
           state.gpsLastLocation.lat = gps.location.lat();
           state.gpsLastLocation.lng = gps.location.lng();
-        } else {
-          // Should we update or not?
-          bool update = true;
-
-          // We need to have enough satelites, which is 4 for reasonable fix
-          if (update)
-            update = state.gpsPrecision >= (byte)4;
-
-          // If the location age is older than 1500ms we most likely don't have
-          // gps fix anymore and we need to wait for new fix.
-          if (update)
-            update = gps.location.age() < 1500UL;
-
-          // When speed is very low we risk having loads of error due to
-          // coordinates being too close together
-          if (update)
-            update = state.gpsSpeed > (word)5 && state.gpsSpeed < (word)300;
-
-          double dHarvesine = TinyGPSPlus::distanceBetween(gps.location.lat(),
-                                                           gps.location.lng(),
-                                                           state.gpsLastLocation.lat,
-                                                           state.gpsLastLocation.lng);
-          double dAprox = equirectangularDistance(gps.location.lat(),
-                                                  gps.location.lng(),
-                                                  state.gpsLastLocation.lat,
-                                                  state.gpsLastLocation.lng);
-
-          double distance = dHarvesine;
-          // Don't update distance when the distance is not within reasonable
-          // difference. GPS has +- 2-3 meter possible error/noise...
-          if(update)
-            update = distance > 0.1 && distance < 200.0;
-
-          // If we think we should update distance, lets do it
-          if (update) {
-            state.gpsLastLocation.lat = gps.location.lat();
-            state.gpsLastLocation.lng = gps.location.lng();
-            state.tripPartial += distance;
-            state.tripTotal += distance;
-            // Log data to SD card
-            sdGPSLogWrite(state, gps, dHarvesine, dAprox, state.tripTotal);
-          }
+          continue;
         }
+
+        double dHarvesine = TinyGPSPlus::distanceBetween(gps.location.lat(),
+                                                         gps.location.lng(),
+                                                         state.gpsLastLocation.lat,
+                                                         state.gpsLastLocation.lng);
+        double dAprox = equirectangularDistance(gps.location.lat(),
+                                                gps.location.lng(),
+                                                state.gpsLastLocation.lat,
+                                                state.gpsLastLocation.lng);
+
+        double distance = dHarvesine;
+        // Don't update distance when the distance is not within reasonable
+        // difference. GPS has +- 2-3 meter possible error/noise...
+        if(distance <= 0.1 || distance >= 200.0) continue;
+
+        // If we think we should update distance, lets do it
+        state.gpsLastLocation.lat = gps.location.lat();
+        state.gpsLastLocation.lng = gps.location.lng();
+        state.tripPartial += distance;
+        state.tripTotal += distance;
+
+        // Log data to SD card
+        sdGPSLogWrite(state, gps, dHarvesine, dAprox);
       }
     }
   }
