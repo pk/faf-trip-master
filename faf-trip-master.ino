@@ -466,7 +466,8 @@ double equirectangularDistance(double lat1, double long1, double lat2, double lo
 
 void gpsUpdate(State& state) {
   while (gpsPort.available() > 0) {
-    if (gps.encode(gpsPort.read())) {
+    char c = gpsPort.read();
+    if (gps.encode(c)) {
       if (gps.satellites.isValid() && gps.satellites.isUpdated()) {
         state.gpsPrecision = (byte)gps.satellites.value();
       }
