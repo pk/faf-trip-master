@@ -370,7 +370,7 @@ bool sdPrepare(char *path) {
     #endif
     return false;
   }
-  file.print("SAT,LAT,LNG,GDSTHW,GDSTAPX,GDSTTOT,GCAP,GSPD");
+  file.print("SAT,LAT,LNG,GDSTHW,GDSTAPX,GDSTTOT,GCAP,GSPD,HDOP");
   #ifdef USE_WHEEL_SENSOR
   file.print(",TWDST,WSPD");
   #endif
@@ -382,8 +382,7 @@ bool sdPrepare(char *path) {
 bool sdGPSLogWrite(State& state,
                    TinyGPSPlus& fix,
                    double dHarvesine,
-                   double dAprox,
-                   double dTotal) {
+                   double dAprox) {
   SdFile file;
   if(!file.open(SD_GPS_FILE, O_WRONLY | O_AT_END | O_APPEND)) {
     #ifdef DEBUG
@@ -404,18 +403,22 @@ bool sdGPSLogWrite(State& state,
   char dAproxStr[7];
   dtostrf(dAprox, 6, 3, dAproxStr);
 
+  char hdopStr[6];
+  dtostrf(state.gpsHdop, 5, 2, hdopStr);
+
   char line[61];
   snprintf(line,
            sizeof(line),
-           "%u,%s,%s,%s,%s,%u,%u,%u",
+           "%u,%s,%s,%s,%s,%u,%u,%u,%s",
            (uint8_t)state.gpsPrecision,
            latString,
            lngString,
            dHarvesineStr,
            dAproxStr,
-           (unsigned int)(dTotal + 0.5),
+           (unsigned int)(state.tripTotal + 0.5),
            (uint8_t)state.gpsHeading,
-           (uint8_t)state.gpsSpeed);
+           (uint8_t)state.gpsSpeed,
+           hdopStr);
   file.print(line);
   #ifdef USE_WHEEL_SENSOR
   char dWheelStr[7];
@@ -473,6 +476,10 @@ void gpsUpdate(State& state) {
     if (gps.encode(c)) {
       if (gps.satellites.isValid() && gps.satellites.isUpdated()) {
         state.gpsPrecision = (byte)gps.satellites.value();
+      }
+
+      if (gps.hdop.isValid() && gps.hdop.isUpdated()) {
+        state.gpsHdop = gps.hdop.hdop();
       }
 
       if (gps.course.isValid() && gps.course.isUpdated()) {
