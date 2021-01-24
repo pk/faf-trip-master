@@ -507,7 +507,7 @@ void gpsUpdate(State& state) {
           // Don't update distance when the distance is not within reasonable
           // difference. GPS has +- 2-3 meter possible error/noise...
           if(update)
-            update = distance < 200.0;
+            update = distance > 1.0 && distance < 200.0;
 
           // If we think we should update distance, lets do it
           if (update) {
