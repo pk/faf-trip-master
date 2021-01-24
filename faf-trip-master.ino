@@ -438,18 +438,17 @@ bool sdGPSLogWrite(State& state,
 //
 
 void gpsSetup() {
-  gpsPort.begin(9600);
-
+  gpsPort.begin(9600, SERIAL_8N1);
   // Send configuration data in UBX protocol
   for(unsigned long i = 0; i < sizeof(UBLOX_INIT); i++) {
     gpsPort.write(pgm_read_byte(UBLOX_INIT + i));
     // Simulating a 38400baud pace (or less),
     // otherwise commands are not accepted by the device.
-    delay(5); 
+    delay(5);
   }
-
   gpsPort.end();
-  gpsPort.begin(115200); 
+  
+  gpsPort.begin(115200, SERIAL_8N1); 
 }
 
 /**
