@@ -567,7 +567,7 @@ void wheelCalculateSpeed() {
     // moving average
     speed = (float)state.wheelSpeed + (speed - (float)state.wheelSpeed) / (float)3.0;
     // Round down < 1 or round normal values
-    state.wheelSpeed = speed < 1.0 ? 0 : speed + 0.5; // Adding 0.5 is the easiest way to round up (int to float trims)
+    state.wheelSpeed = speed < 1.0 ? 0 : speed + 0.5;
 
     state.wheelPreviousTotal = state.wheelTotal;
   }
