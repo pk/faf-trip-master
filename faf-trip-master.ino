@@ -416,7 +416,7 @@ bool sdGPSLogWrite(State& state,
   file.println(line);
   file.close();
 
-  #if defined(DEBUG)
+  #ifdef DEBUG
   Serial.println(line);
   #endif
 
