@@ -116,11 +116,6 @@ const char UBLOX_INIT[] PROGMEM = {
 #define gpsPort Serial1
 #include <TinyGPS++.h>
 TinyGPSPlus gps;
-/*
-TinyGPSCustom pdop(gps, "GPGSA", 15); // $GPGSA sentence, 15th element
-TinyGPSCustom hdop(gps, "GPGSA", 16); // $GPGSA sentence, 16th element
-TinyGPSCustom vdop(gps, "GPGSA", 17); // $GPGSA sentence, 17th element
-*/
 
 // SDCard
 #define SD_CS_PIN 10
@@ -460,11 +455,12 @@ void gpsSetup() {
     gpsPort.write(pgm_read_byte(UBLOX_INIT + i));
     // Simulating a 38400baud pace (or less),
     // otherwise commands are not accepted by the device.
-    delay(5);
+    delay(10);
   }
   gpsPort.end();
+  delay(100);
   
-  gpsPort.begin(115200, SERIAL_8N1); 
+  gpsPort.begin(115200, SERIAL_8N1);
 }
 
 /**
