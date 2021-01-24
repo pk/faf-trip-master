@@ -87,7 +87,7 @@ HT1621 lcd;
 
 // Speed
 #ifdef USE_WHEEL_SENSOR
-#define WHEEL_PIN 2
+#define WHEEL_PIN 17
 volatile byte wheelRevs = 0;
 #endif
 
