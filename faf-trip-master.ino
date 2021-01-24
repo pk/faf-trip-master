@@ -423,7 +423,18 @@ bool sdGPSLogWrite(State& state,
            (unsigned int)(dTotal + 0.5),
            (uint8_t)state.gpsHeading,
            (uint8_t)state.gpsSpeed);
-  file.println(line);
+  file.print(line);
+  #ifdef USE_WHEEL_SENSOR
+  char dWheelStr[7];
+  dtostrf(state.wheelTotal, 6, 3, dWheelStr);
+  snprintf(line,
+           sizeof(line),
+           ",%s,%u",
+           dWheelStr,
+           (uint8_t)state.wheelSpeed);
+  file.print(line);
+  #endif
+  file.println("");
   file.close();
 
   #ifdef DEBUG
